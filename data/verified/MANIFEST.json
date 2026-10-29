@@ -1,0 +1,156 @@
+{
+  "files": [
+    {
+      "file": "nisr_sas_2023_2026.csv",
+      "title": "NISR SAS district crop area and production, 2023–2026",
+      "publisher": "National Institute of Statistics of Rwanda (NISR)",
+      "source_url": "https://statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-season-2026 | https://statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-season-b-2026 | https://www.alpha.statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-2024-annual-report-2024 | https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2023 | https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2025-",
+      "reference_period": "2023 Seasons A/B/C; 2024 Seasons A/B/C; 2025 Seasons A/B/C; 2026 Seasons A/B",
+      "retrieved_at": "2026-10-23",
+      "sha256": "98de5073d00f60231df496da3c19912834a3156a7f2f044bd6eaa5108f313927",
+      "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+      "processing_steps": "Long-format aggregate of matched district/crop/season cultivated area and production tables. See source fields on every row and source_workbooks for workbook hashes and table numbers.",
+      "limitations": "NISR source data; structural validation is performed by CropPulse but does not independently verify NISR's survey estimates. 2026 covers Seasons A and B only. Missing/dash cells and explicit 0/0 non-cultivation pairs are not emitted. Area/production pairs with zero area and positive production are excluded and enumerated in quality_report. This dataset does not support image diagnosis or disease-treatment recommendations.",
+      "quality_report": {
+        "rows_written": 2020,
+        "omitted_unpaired_or_unobserved": 86,
+        "omitted_explicit_zero_area_and_zero_production": 44,
+        "excluded_zero_area_positive_production": [
+          {
+            "file": "SAS 2023_Annual Tables (3).xlsx",
+            "season": "2023 C",
+            "district": "Nyamasheke",
+            "crop": "Irish potato",
+            "area_ha": 0.0,
+            "production_t": 1.0,
+            "area_table": 12,
+            "production_table": 24
+          }
+        ]
+      },
+      "source_workbooks": [
+        {
+          "file": "SAS 2023_Annual Tables (3).xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2023 Season A tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2023",
+          "reference_period": "2023 Season A",
+          "sha256": "fc07b45002c7aff36a0d6ee437acc47ff4bfea33b8bf240f264a78b41322fc82",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 10 and crop-production Table 22; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2023_Annual Tables (3).xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2023 Season B tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2023",
+          "reference_period": "2023 Season B",
+          "sha256": "fc07b45002c7aff36a0d6ee437acc47ff4bfea33b8bf240f264a78b41322fc82",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 11 and crop-production Table 23; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2023_Annual Tables (3).xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2023 Season C tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2023",
+          "reference_period": "2023 Season C",
+          "sha256": "fc07b45002c7aff36a0d6ee437acc47ff4bfea33b8bf240f264a78b41322fc82",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 12 and crop-production Table 24; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2024_Annual Tables.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2024 Season A tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.alpha.statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-2024-annual-report-2024",
+          "reference_period": "2024 Season A",
+          "sha256": "5c7c6024d9a7b766d9911348aa3b5d5316555c6aa4a8c53f10dc290e2d8906e6",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 10 and crop-production Table 21; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2024_Annual Tables.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2024 Season B tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.alpha.statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-2024-annual-report-2024",
+          "reference_period": "2024 Season B",
+          "sha256": "5c7c6024d9a7b766d9911348aa3b5d5316555c6aa4a8c53f10dc290e2d8906e6",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 11 and crop-production Table 22; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2024_Annual Tables.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2024 Season C tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.alpha.statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-2024-annual-report-2024",
+          "reference_period": "2024 Season C",
+          "sha256": "5c7c6024d9a7b766d9911348aa3b5d5316555c6aa4a8c53f10dc290e2d8906e6",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 12 and crop-production Table 23; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2025_Annual Tables.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2025 Season A tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2025-",
+          "reference_period": "2025 Season A",
+          "sha256": "3a6ed44f1e973578e46221b392e54833bb39e73b681be6e54fa2b44efe5fe1f7",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 13 and crop-production Table 24; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2025_Annual Tables.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2025 Season B tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2025-",
+          "reference_period": "2025 Season B",
+          "sha256": "3a6ed44f1e973578e46221b392e54833bb39e73b681be6e54fa2b44efe5fe1f7",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 14 and crop-production Table 25; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "SAS 2025_Annual Tables.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2025 Season C tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://www.statistics.gov.rw/data-sources/surveys/Seasonal-Agricultural-Survey/Seasonal-Agricultural-Survey/seasonal-agricultural-survey-2025-",
+          "reference_period": "2025 Season C",
+          "sha256": "3a6ed44f1e973578e46221b392e54833bb39e73b681be6e54fa2b44efe5fe1f7",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 15 and crop-production Table 26; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "Tables_2026 Season A.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2026 Season A tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-season-2026",
+          "reference_period": "2026 Season A",
+          "sha256": "c4e4cb4c4e697febac1cb332280189a4dc6ff7f10d0de956bff279b284c5d4c2",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 11 and crop-production Table 15; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        },
+        {
+          "file": "Tables_2026 Season B.xlsx",
+          "title": "NISR Seasonal Agricultural Survey 2026 Season B tables",
+          "publisher": "National Institute of Statistics of Rwanda (NISR)",
+          "source_url": "https://statistics.gov.rw/statistical-publications/agriculture-environment/seasonal-agricultural-survey-season-b-2026",
+          "reference_period": "2026 Season B",
+          "sha256": "5ca81c6b0a54c4a282ed718d134423920cc75279a5827bbe772fe6eb1a4e9d27",
+          "units": "cultivated area in hectares (ha); production in tonnes (MT)",
+          "processing_steps": "Read district-level cultivated-area Table 9 and crop-production Table 13; matched district and selected crop columns; omitted dash/blank/NA cells and explicit 0/0 non-cultivation rows; retained positive-area records with zero production.",
+          "limitations": "Aggregate district-season observations. Not farmer-level data, disease prevalence, causal analysis, or a crop recommendation by itself. CropPulse supports only the selected crop categories listed in the import code."
+        }
+      ]
+    }
+  ]
+}

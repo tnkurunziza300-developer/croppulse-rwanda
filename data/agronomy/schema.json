@@ -1,0 +1,635 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://croppulse.local/schemas/agronomy-knowledge-v1.json",
+  "title": "CropPulse agronomic knowledge registry",
+  "description": "Version-controlled source, source-statement, rule, and review records. Source statements are not automatically agronomic rules.",
+  "type": "object",
+  "definitions": {
+    "ruleStatus": {
+      "enum": [
+        "draft",
+        "evidence_collected",
+        "technical_review",
+        "local_specialist_review",
+        "approved",
+        "rejected",
+        "expired",
+        "quarantined",
+        "withdrawn",
+        "superseded"
+      ]
+    },
+    "geography": {
+      "type": "object",
+      "required": [
+        "type",
+        "scope"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "national",
+            "province",
+            "district",
+            "sector",
+            "site",
+            "unknown"
+          ]
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "version",
+        "category",
+        "status",
+        "crop",
+        "geography",
+        "season_scope",
+        "production_system",
+        "recommendation",
+        "conditions",
+        "source_references",
+        "limitations",
+        "review_status",
+        "effective_from",
+        "revalidate_by",
+        "change_history"
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "minLength": 3
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": [
+            "crop_suitability",
+            "planting",
+            "soil",
+            "fertilizer",
+            "water",
+            "crop_management",
+            "pest_disease",
+            "other"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/ruleStatus"
+        },
+        "crop": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variety": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "geography": {
+          "$ref": "#/definitions/geography"
+        },
+        "season_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "production_system": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/condition"
+          }
+        },
+        "recommendation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value",
+              "unit"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {},
+              "unit": {
+                "type": "string"
+              },
+              "rate_basis": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "product_registration": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Required for pesticide/chemical use recommendations; record current Rwandan legal registration and exact permitted use.",
+          "properties": {
+            "authority": {
+              "type": "string"
+            },
+            "registration_number": {
+              "type": "string"
+            },
+            "checked_at": {
+              "type": "string",
+              "format": "date"
+            },
+            "valid_until": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date"
+            },
+            "crop": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "permitted_use": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "source_id",
+              "locator",
+              "paraphrase"
+            ],
+            "properties": {
+              "source_id": {
+                "type": "string"
+              },
+              "locator": {
+                "type": "string"
+              },
+              "paraphrase": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "review_status": {
+          "$ref": "#/definitions/reviewStatus"
+        },
+        "confidence_method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effective_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "revalidate_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "supersedes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "change_history": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewStatus": {
+      "enum": [
+        "not_reviewed",
+        "technical_review_pending",
+        "local_specialist_review_pending",
+        "approved_for_scope",
+        "rejected",
+        "expired",
+        "withdrawn",
+        "superseded"
+      ]
+    },
+    "condition": {
+      "type": "object",
+      "required": [
+        "parameter",
+        "operator",
+        "value"
+      ],
+      "properties": {
+        "parameter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "ne",
+            "in",
+            "not_in",
+            "gt",
+            "gte",
+            "lt",
+            "lte"
+          ]
+        },
+        "value": {},
+        "unit": {
+          "type": "string",
+          "enum": [
+            "%",
+            "mm",
+            "cm",
+            "m",
+            "m2",
+            "ha",
+            "kg",
+            "g",
+            "kg/ha",
+            "g/ha",
+            "t/ha",
+            "L",
+            "mL",
+            "L/ha",
+            "mL/L",
+            "?C",
+            "pH",
+            "days",
+            "days_after_planting"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "source_id",
+        "organization",
+        "title",
+        "source_type",
+        "url",
+        "language",
+        "reference",
+        "geographic_scope",
+        "intended_use",
+        "reuse_status",
+        "verification_status"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "organization": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "source_type": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "geographic_scope": {
+          "type": "string"
+        },
+        "intended_use": {
+          "type": "string"
+        },
+        "reuse_status": {
+          "type": "string"
+        },
+        "verification_status": {
+          "type": "string"
+        },
+        "source_authority": {
+          "type": "string"
+        },
+        "reviewer_notes": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "publication_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "accessed_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "content_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "content_path": {
+          "type": "string"
+        },
+        "crops": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "varieties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "statement": {
+      "type": "object",
+      "required": [
+        "statement_id",
+        "source_id",
+        "reference",
+        "paraphrase",
+        "scope",
+        "limitations"
+      ],
+      "properties": {
+        "statement_id": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "paraphrase": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "limitations": {
+          "type": "string"
+        },
+        "statement_type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewDecision": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "rule_version",
+        "decision",
+        "reviewer_id",
+        "reviewer_role",
+        "decision_date",
+        "rationale"
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rule_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "enum": [
+            "evidence_collected",
+            "technical_review",
+            "local_specialist_review",
+            "approved",
+            "rejected",
+            "expired",
+            "withdrawn",
+            "superseded",
+            "quarantined"
+          ]
+        },
+        "reviewer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualification_verified": {
+          "type": "boolean",
+          "description": "Local attestation only; not authenticated proof."
+        },
+        "decision_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supersedes_decision_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "qualityIssue": {
+      "type": "object",
+      "required": [
+        "issue_id",
+        "category",
+        "severity",
+        "status",
+        "description",
+        "required_action",
+        "recorded_at"
+      ],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "open",
+            "in_progress",
+            "resolved",
+            "quarantined"
+          ]
+        },
+        "related_source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "related_rule_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "required_action": {
+          "type": "string"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "resolution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved_at": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/source"
+      }
+    },
+    "statements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/statement"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/rule"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/reviewDecision"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/qualityIssue"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sources",
+    "statements",
+    "rules",
+    "decisions",
+    "issues"
+  ]
+}

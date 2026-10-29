@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "statements": [
+    {
+      "statement_id": "rab.crop-tech-transfer.mandate",
+      "source_id": "rab.crop-innovation-tech-transfer",
+      "statement_type": "source_description",
+      "reference": "Department mandate, page sections at lines 8-12",
+      "paraphrase": "RAB describes responsibilities that include crop research, technology transfer, extension services, and development of good agricultural practice training materials.",
+      "scope": "Institutional mandate; no crop-specific recommendation values",
+      "limitations": "This source description does not validate any current CropPulse suitability, planting, altitude, water, fertilizer, or yield rule."
+    },
+    {
+      "statement_id": "rab.rwasis-launch.crop-status-2024",
+      "source_id": "rab.rwasis-launch-announcement",
+      "statement_type": "source_description",
+      "reference": "Article paragraph 3",
+      "paraphrase": "At the 2024-11-29 launch announcement, RAB reported RwaSIS fertilizer recommendations complete for potato and rice and final testing still ongoing for maize, wheat, cassava, and beans.",
+      "scope": "Status as reported at launch; soil UPI based and location-specific",
+      "limitations": "This is a dated announcement, not current proof of release status or an extractable recommendation dataset. Do not turn it into fertilizer rules."
+    },
+    {
+      "statement_id": "meteorwanda.agriculture-services-types",
+      "source_id": "meteorwanda.agriculture-climate-services",
+      "statement_type": "source_description",
+      "reference": "Page section ‘Key forecasts that are relevant to Agriculture’",
+      "paraphrase": "METEO RWANDA describes short-range, medium-range, seasonal, and inter-annual forecasts as relevant agricultural climate services.",
+      "scope": "Weather/climate service description",
+      "limitations": "A service description is not a forecast record or evidence for a crop rule. Individual products need issue date, valid period, geography, uncertainty, and reuse terms."
+    },
+    {
+      "statement_id": "nisr.sas.role-and-limits",
+      "source_id": "nisr.sas-2023-2026",
+      "statement_type": "dataset_metadata",
+      "reference": "data/verified/MANIFEST.json: limitations, reference_period, units, and source_workbooks",
+      "paraphrase": "The project’s NISR SAS extract contains district-season crop area and production observations with units and source workbook/table provenance; it is historical statistical context, not a crop-management guide.",
+      "scope": "District-level aggregates; 2023-2025 A/B/C and 2026 A/B",
+      "limitations": "CropPulse performs structural validation but does not independently revalidate NISR estimates. Statistics do not validate suitability, farm-level yield forecasts, or input recommendations."
+    }
+  ]
+}

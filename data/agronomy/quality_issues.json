@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "issues": [
+    {
+      "issue_id": "AGQ-0001",
+      "category": "missing_evidence",
+      "severity": "blocking_for_farmer_approval",
+      "status": "open",
+      "related_source_ids": [],
+      "related_rule_ids": [],
+      "description": "The 12 legacy CropPulse crop entries have no rule-level agronomic source citations or local specialist decisions.",
+      "required_action": "Collect crop-specific primary evidence and scope it by crop, variety, location, season, and conditions; obtain qualified local review.",
+      "recorded_at": "2026-10-22"
+    },
+    {
+      "issue_id": "AGQ-0002",
+      "category": "source_access",
+      "severity": "blocking_for_ingestion",
+      "status": "open",
+      "related_source_ids": ["rab.rwasis-portal"],
+      "related_rule_ids": [],
+      "description": "The RwaSIS portal content, data export/API, geographic resolution, current rule status, and reuse terms were not accessible to this implementation.",
+      "required_action": "Obtain authorized, documented access and confirm scope and reuse conditions with RAB before extracting or redistributing data.",
+      "recorded_at": "2026-10-22"
+    },
+    {
+      "issue_id": "AGQ-0003",
+      "category": "reuse_permission",
+      "severity": "blocking_for_redistribution",
+      "status": "open",
+      "related_source_ids": ["rab.rwasis-portal", "meteorwanda.agriculture-climate-services"],
+      "related_rule_ids": [],
+      "description": "Permissions for extracting, storing, or redistributing underlying RwaSIS and METEO RWANDA data products are not established by their public landing pages.",
+      "required_action": "Confirm product-specific terms, attribution, retention, and commercial-use permission with the issuing agency.",
+      "recorded_at": "2026-10-22"
+    },
+    {
+      "issue_id": "AGQ-0004",
+      "category": "outdated_scope_status",
+      "severity": "blocking_for_rule_approval",
+      "status": "open",
+      "related_source_ids": ["rab.rwasis-launch-announcement"],
+      "related_rule_ids": [],
+      "description": "The RwaSIS announcement describes testing status at its 2024 launch; it does not establish the current status or exact contents of recommendations.",
+      "required_action": "Verify current version, crop coverage, soil/UPI applicability, geography, trial basis, and current approval status directly with RAB.",
+      "recorded_at": "2026-10-22"
+    },
+    {
+      "issue_id": "AGQ-0005",
+      "category": "statistics_scope",
+      "severity": "informational",
+      "status": "resolved",
+      "related_source_ids": ["nisr.sas-2023-2026"],
+      "related_rule_ids": [],
+      "description": "NISR SAS observations are aggregate historical statistics; structural checksum/schema validation does not independently validate survey estimates or make them agronomic guidance.",
+      "required_action": "Keep the statistics in the descriptive analytics path and do not cite them as proof of suitability, causality, fertilizer rates, or treatment efficacy.",
+      "recorded_at": "2026-10-22",
+      "resolution": "The recommender uses NISR history only as descriptive context; verified-source status requires NISR/SAS provenance rather than a generic validated flag. Regression tests cover ranking invariance, non-independent validation wording, and the prohibition on approved guidance activation (tests/test_recommender.py and tests/test_backend_api.py). Farmer-facing comparison displays dataset period, units, retrieval date, source, and limitations.",
+      "resolved_at": "2026-10-29"
+    },
+    {
+      "issue_id": "AGQ-0006",
+      "category": "geographic_scope",
+      "severity": "blocking_for_national_claim",
+      "status": "open",
+      "related_source_ids": [],
+      "related_rule_ids": [],
+      "description": "No approved crop-specific rules currently demonstrate suitable coverage across Rwanda's 30 districts, seasons, varieties, soils, and production systems.",
+      "required_action": "Report evidence gaps by exact scope and do not claim national agronomic coverage until evidence and local review support it.",
+      "recorded_at": "2026-10-22"
+    }
+  ]
+}

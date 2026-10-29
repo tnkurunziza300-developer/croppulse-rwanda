@@ -1,0 +1,14 @@
+{
+  "dataset_version": "0.1.0",
+  "schema_version": "1.0",
+  "dataset_sha256": "0fc47274c4d4eb8e1e485b2b3a352763ca57bec973dbde65ff79cd62b8cbf88a",
+  "files": {
+    "data/agronomy/schema.json": "ea6ab72a4d1678ebd4b6210f3961346456fbc2bb263011af4ce63cbdb219da50",
+    "data/agronomy/sources.json": "c64aed55cb3aab2898b9caaec162f475979109ebeb89318b575ddb2cf3c33123",
+    "data/agronomy/statements.json": "2cf866b554e3b7051d55b9bbe4d75128aef213b86dfc4130edf170e76c2dcd2f",
+    "data/agronomy/rules.json": "619f664181af91448a0070c2dc4febe6e5c497183bbab82fb09da003b5116b1d",
+    "data/agronomy/review_decisions.json": "5bc0f737622f40ac572fec99ec54829ac0747fa444dc764a9dd490f120da5ff4",
+    "data/agronomy/quality_issues.json": "6b41a58618ddf9899f2ea808da50c48353974fc641a804a2dab63e64271c554f"
+  },
+  "declared_approved_rule_count": 0
+}
