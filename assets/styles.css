@@ -19,6 +19,14 @@
   font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Keep the page palette stable when browser/OS dark mode is enabled. */
+.stApp,
+.stApp [data-testid="stAppViewContainer"],
+.stApp section.main {
+  color-scheme: light;
+  color: var(--cp-ink);
+}
+
 [data-testid="stHeader"] {
   background: rgba(244, 247, 244, 0.92);
 }
@@ -65,6 +73,19 @@
   font-weight: 580;
 }
 
+/* Streamlit has used both `section.main` and `data-testid=stMain` wrappers.
+   Cover both so widget labels remain readable across supported versions. */
+.stApp section.main label,
+.stApp section.main [data-testid="stWidgetLabel"],
+.stApp section.main [data-testid="stWidgetLabel"] *,
+.stApp [data-testid="stMain"] label,
+.stApp [data-testid="stMain"] [data-testid="stWidgetLabel"],
+.stApp [data-testid="stMain"] [data-testid="stWidgetLabel"] * {
+  color: #26362f !important;
+  opacity: 1 !important;
+  font-weight: 580;
+}
+
 [data-testid="stMain"] [data-baseweb="input"] > div,
 [data-testid="stMain"] [data-baseweb="textarea"] > div,
 [data-testid="stMain"] [data-baseweb="select"] > div {
@@ -73,11 +94,46 @@
   background: #ffffff !important;
 }
 
+.stApp section.main [data-baseweb="input"] > div,
+.stApp section.main [data-baseweb="textarea"] > div,
+.stApp section.main [data-baseweb="select"] > div,
+.stApp [data-testid="stMain"] [data-baseweb="input"] > div,
+.stApp [data-testid="stMain"] [data-baseweb="textarea"] > div,
+.stApp [data-testid="stMain"] [data-baseweb="select"] > div {
+  border: 1px solid #cbd8ce !important;
+  border-radius: 0.6rem !important;
+  background-color: #ffffff !important;
+  box-shadow: none;
+}
+
 [data-testid="stMain"] [data-baseweb="input"] input,
 [data-testid="stMain"] [data-baseweb="textarea"] textarea,
 [data-testid="stMain"] [data-baseweb="select"] input,
 [data-testid="stMain"] [data-baseweb="select"] div {
   color: #1d2b27 !important;
+}
+
+.stApp section.main [data-baseweb="input"] input,
+.stApp section.main [data-baseweb="textarea"] textarea,
+.stApp section.main [data-baseweb="select"] input,
+.stApp section.main [data-baseweb="select"] [role="combobox"],
+.stApp [data-testid="stMain"] [data-baseweb="input"] input,
+.stApp [data-testid="stMain"] [data-baseweb="textarea"] textarea,
+.stApp [data-testid="stMain"] [data-baseweb="select"] input,
+.stApp [data-testid="stMain"] [data-baseweb="select"] [role="combobox"] {
+  color: #1d2b27 !important;
+  -webkit-text-fill-color: #1d2b27 !important;
+  background-color: #ffffff !important;
+  caret-color: #1d2b27;
+}
+
+.stApp section.main input::placeholder,
+.stApp section.main textarea::placeholder,
+.stApp [data-testid="stMain"] input::placeholder,
+.stApp [data-testid="stMain"] textarea::placeholder {
+  color: #68766f !important;
+  -webkit-text-fill-color: #68766f !important;
+  opacity: 1 !important;
 }
 
 [data-testid="stMain"] [data-baseweb="input"] input:disabled,
@@ -104,6 +160,12 @@
 [data-testid="stSidebar"] label,
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
   color: #edf5ef;
+}
+
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] * {
+  color: #edf5ef !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
