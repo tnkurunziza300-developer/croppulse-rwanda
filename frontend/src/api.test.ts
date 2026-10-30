@@ -28,6 +28,37 @@ describe('resolveApiBaseUrl', () => {
     expect(resolveApiBaseUrl('https://api.example.org/', 'crop.example.org', true)).toBe('https://api.example.org');
   });
 
+  it('uses relative same-origin API paths for an explicitly configured production proxy', () => {
+    expect(resolveApiBaseUrl('same-origin', 'crop.example.org', true)).toBe('');
+  });
+
+  it('keeps API requests same-origin, credentialed, and path/query intact in proxy mode', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'same-origin');
+    vi.stubEnv('PROD', true);
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === '/v1/browser-auth/csrf') {
+        return new Response(JSON.stringify({ csrf_token: 'csrf-test-token' }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+
+    const { api: isolatedApi } = await import('./api');
+    await expect(isolatedApi('/v1/farms?offset=20&limit=10', {
+      method: 'POST', body: JSON.stringify({ name: 'synthetic farm' }),
+    })).resolves.toEqual({ ok: true });
+
+    expect(calls.map(({ url }) => url)).toEqual([
+      '/v1/browser-auth/csrf',
+      '/v1/farms?offset=20&limit=10',
+    ]);
+    expect(calls.every(({ init }) => init?.credentials === 'include')).toBe(true);
+    expect(calls[1].init?.method).toBe('POST');
+    expect(calls[1].init?.body).toBe(JSON.stringify({ name: 'synthetic farm' }));
+  });
+
   it('uses only the explicit demo API when demo mode is enabled', () => {
     expect(resolveApiBaseUrl(
       'https://farm-api.example.org', 'crop.example.org', true, true, 'https://demo-api.example.org',

@@ -1,57 +1,83 @@
-# Vercel multi-service deployment draft
+# Vercel React frontend with a same-origin API proxy
 
-The repository-root `vercel.json` describes three services: a Vite frontend,
-FastAPI API, and a Streamlit planning container. Public rewrites send `/health`
-and `/v1/*` to FastAPI, `/planner` and `/planner/*` to Streamlit, and other
-paths to React. The planner service binds to the API at runtime through
-`CROP_PULSE_API_URL`; do not set that binding variable manually.
+Vercel hosts only the React/Vite frontend. FastAPI and Streamlit remain separate
+Python services. The browser calls `/v1/...` on its Vercel origin; Vercel forwards
+those paths to the configured HTTPS FastAPI origin. This avoids cross-site
+browser cookies while keeping the upstream hostname out of the Vite bundle.
 
 ## Vercel project settings
 
-Select the Services project framework and confirm that this feature is enabled
-for the Vercel account. Configure these values in Vercel's server-side runtime
-environment settings, never in the repository:
+Set **Root Directory** to `frontend`, **Framework Preset** to Vite, **Build
+Command** to `npm run build`, **Output Directory** to `dist`, and leave the
+Install Command automatic (`npm ci` from `frontend/package-lock.json`). Do not
+configure a custom container build or a Services project. There is one Vercel
+configuration file: `frontend/vercel.mjs`; the old root service-routing config
+was removed because it conflicted with the separate Render API architecture.
 
-- API service: `CROP_PULSE_ENVIRONMENT=production`,
-  `CROP_PULSE_DATABASE_URL`, `CROP_PULSE_SECRET_KEY`,
-  `CROP_PULSE_CORS_ORIGINS`, `CROP_PULSE_COOKIE_SECURE=1`,
-  `CROP_PULSE_REACT_URL`, and `CROP_PULSE_STREAMLIT_URL`.
-- Frontend build: the `frontend` service's `buildCommand` sets the non-secret
-  `VITE_API_BASE_URL=same-origin` value for the production build. This matches
-  the public `/v1/*` rewrite to FastAPI. No API hostname or database credential
-  is embedded in the frontend bundle.
-- Planner runtime: `CROP_PULSE_ENVIRONMENT=production` is set in its image;
-  `CROP_PULSE_API_URL` is injected by the service binding.
+The configuration requires `CROP_PULSE_API_ORIGIN` during Vercel configuration
+evaluation. Add it as a non-`VITE_` project environment variable for Preview and
+Production. It must be the public FastAPI HTTPS origin only, with no path,
+credentials, query, or fragment. The config validates this value and emits a
+rewrite for `/v1/:path*`, followed by the existing SPA fallback to `/index.html`.
+The `/v1` scope matches the current React API calls and does not capture static
+assets, health checks, or client-side routes. The `/v1` rewrite is marked
+non-cacheable to protect account-specific responses.
 
-Set `CROP_PULSE_REACT_URL` to the approved HTTPS project origin and
-`CROP_PULSE_STREAMLIT_URL` to that same origin plus `/planner`. The API uses
-these configured public URLs to create the one-time browser handoff. They are
-not service bindings because the API constructs redirects and does not make
-server-to-server requests to those services.
+Set `VITE_API_BASE_URL` to the literal `same-origin` for Vercel Preview and
+Production builds. This is a public build-time switch, not a URL or secret. The
+Vercel configuration origin is not a Vite variable and is not compiled into
+browser JavaScript. Do not put database URLs, passwords, JWT/session secrets,
+tokens, or API credentials in any `VITE_*` value. Keep demo mode disabled unless
+separately reviewed and explicitly configured.
 
-The API's existing production runtime checks still apply. Configure its
-database, secret, trusted proxy behavior, and CORS origins before deployment;
-do not run migrations as part of a build. Apply migrations only to a reviewed,
-disposable database first, using a separate controlled release step.
+On FastAPI, set `CROP_PULSE_CORS_ORIGINS` to the exact HTTPS Vercel Preview and
+Production origins that should be allowed. Use explicit origins; do not use
+`*`. The backend must also remain configured for HTTPS secure cookies. The
+frontend's existing credentialed fetches and CSRF token flow are unchanged.
 
-## Release blockers and limitations
+## Local development
 
-- `data/verified/nisr_sas_2023_2026.csv` is excluded from Git by the existing
-  `.gitignore`. A fresh Vercel checkout therefore will not contain this file,
-  even though it exists in some local workspaces. Decide whether its source
-  terms permit packaging it, then add it through the approved data-release
-  process and verify it against `data/verified/MANIFEST.json`. Do not silently
-  remove the file or fabricate a replacement.
-- Confirm the bundled crop-health model's redistribution and derivative-work
-  terms before distributing the API/container image.
-- Streamlit requires its public `/planner` path for assets and WebSocket
-  traffic. Vercel's Container runtime and Services must be available for this
-  project, and long-running WebSocket sessions need deployment verification.
-  Container local storage is ephemeral; durable records belong in the
-  configured external database.
-- The current dashboard routes Streamlit server-side calls through the private
-  service binding. Calls made by the browser use the public same-origin
-  `/v1/*` rewrite; browser code cannot access runtime bindings.
+Do not set `VITE_API_BASE_URL=same-origin` locally. The existing Vite default
+continues to call `http://127.0.0.1:8002`. No public backend URL is required for
+local development.
 
-This is deployment configuration, not evidence of a successful Vercel build,
-database connection, browser handoff, or hosted readiness.
+## Proxy/header behavior and verification boundary
+
+Vercel documents external-origin rewrites as reverse-proxy routing that leaves
+the browser URL unchanged. The wildcard forwards the `/v1` path; no request or
+response header transform is configured, so the proxy does not intentionally
+remove authentication headers or upstream `Set-Cookie` headers. Vercel's
+documentation does not explicitly guarantee `Set-Cookie` forwarding semantics,
+so verify multiple `Set-Cookie` headers, cookie paths, `Secure`, and the CSRF
+cookie flow in a protected Preview deployment before using the proxy with
+accounts. Do not treat unit tests as proof of Vercel edge behavior. If Preview
+testing shows cookies are not preserved correctly, replace the external rewrite
+with a Vercel serverless proxy handler that explicitly forwards the request and
+all upstream response headers, then test it in Preview.
+
+## Local verification commands
+
+From PowerShell:
+
+```powershell
+Set-Location 'C:\xampp\htdocs\croppulse-rwanda (4)\croppulse-rwanda\frontend'
+npm ci
+npm test
+npm run typecheck
+npm run lint
+$env:VITE_API_BASE_URL = 'same-origin'
+$env:CROP_PULSE_API_ORIGIN = 'https://api.example.invalid'
+npm run build
+```
+
+The example origin above is only a harmless build-test placeholder; replace it
+in Vercel's Preview and Production environment configuration with the actual
+FastAPI HTTPS origin. Do not commit the value to source control. After the local
+build, inspect `dist` to confirm neither the placeholder nor any configured
+upstream origin appears in JavaScript bundles.
+
+Before considering the proxy verified, make a protected Preview deployment and
+check the build log, SPA deep links, static assets, API methods/bodies/query
+strings/status codes, `Cache-Control: no-store`, login/logout `Set-Cookie`
+headers, and browser cookie/CSRF behavior. No Vercel deployment or browser test
+was performed by this source change.

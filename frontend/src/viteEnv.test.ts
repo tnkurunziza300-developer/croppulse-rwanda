@@ -40,6 +40,13 @@ describe('production frontend environment guard', () => {
     })).toThrow(/cannot be set unless VITE_DEMO_MODE=true/);
   });
 
+  it('accepts the explicit same-origin proxy sentinel without a public backend URL', () => {
+    expect(() => assertSafeFrontendEnvironment('production', {
+      VITE_API_BASE_URL: 'same-origin',
+      VITE_DEMO_MODE: 'false',
+    })).not.toThrow();
+  });
+
   it('enables demo builds only with a distinct explicit demo API origin', () => {
     expect(() => assertSafeFrontendEnvironment('production', {
       VITE_API_BASE_URL: 'https://farm-api.example.invalid',
