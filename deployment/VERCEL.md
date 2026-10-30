@@ -16,7 +16,10 @@ environment settings, never in the repository:
   `CROP_PULSE_DATABASE_URL`, `CROP_PULSE_SECRET_KEY`,
   `CROP_PULSE_CORS_ORIGINS`, `CROP_PULSE_COOKIE_SECURE=1`,
   `CROP_PULSE_REACT_URL`, and `CROP_PULSE_STREAMLIT_URL`.
-- Frontend build environment: `VITE_API_BASE_URL=same-origin`.
+- Frontend build: the `frontend` service's `buildCommand` sets the non-secret
+  `VITE_API_BASE_URL=same-origin` value for the production build. This matches
+  the public `/v1/*` rewrite to FastAPI. No API hostname or database credential
+  is embedded in the frontend bundle.
 - Planner runtime: `CROP_PULSE_ENVIRONMENT=production` is set in its image;
   `CROP_PULSE_API_URL` is injected by the service binding.
 
