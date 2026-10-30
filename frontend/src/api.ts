@@ -377,8 +377,58 @@ export interface CropHealthCase {
   created_at: string; updated_at: string; updates?: CropHealthUpdate[];
 }
 
-export function resolveApiBaseUrl(configuredBaseUrl: string | undefined, pageHostname: string): string {
-  const configured = (configuredBaseUrl ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
+export function resolveApiBaseUrl(
+  configuredBaseUrl: string | undefined,
+  pageHostname: string,
+  production = false,
+  demoMode = false,
+  configuredDemoBaseUrl?: string,
+): string {
+  const configuredValue = configuredBaseUrl?.trim();
+  if (demoMode) {
+    if (!configuredValue) throw new Error('Demo mode requires an explicit farmer API origin so it can verify isolation.');
+    const demoValue = configuredDemoBaseUrl?.trim();
+    if (!demoValue) throw new Error('Demo mode requires an explicit VITE_DEMO_API_BASE_URL; no farmer API fallback is allowed.');
+    const parseOrigin = (value: string, label: string): URL => {
+      let parsed: URL;
+      try { parsed = new URL(value); }
+      catch { throw new Error(`${label} must be a valid API origin.`); }
+      if (!parsed.hostname || parsed.username || parsed.password || !['', '/'].includes(parsed.pathname) || parsed.search || parsed.hash) {
+        throw new Error(`${label} must be an origin without credentials, path, query, or fragment.`);
+      }
+      const loopback = ['localhost', '127.0.0.1'].includes(parsed.hostname);
+      if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback && !production)) {
+        throw new Error(`${label} must use HTTPS (HTTP is allowed only for local development).`);
+      }
+      if (production && (parsed.protocol !== 'https:' || ['localhost', '127.0.0.1'].includes(parsed.hostname))) {
+        throw new Error(`${label} must be a public HTTPS origin in production.`);
+      }
+      return parsed;
+    };
+    const farmerOrigin = parseOrigin(configuredValue, 'VITE_API_BASE_URL');
+    const demoOrigin = parseOrigin(demoValue, 'VITE_DEMO_API_BASE_URL');
+    if (farmerOrigin.origin === demoOrigin.origin) {
+      throw new Error('Demo API must use a distinct origin from the farmer API.');
+    }
+    return demoOrigin.origin;
+  }
+  if (production) {
+    if (!configuredValue) throw new Error('A production build requires an explicit HTTPS VITE_API_BASE_URL.');
+    // Vercel's public /v1 rewrite keeps browser requests on the current origin.
+    // Bindings are only available to server-side runtime code, not this bundle.
+    if (configuredValue === 'same-origin') return '';
+    let productionUrl: URL;
+    try { productionUrl = new URL(configuredValue); }
+    catch { throw new Error('Production VITE_API_BASE_URL must be a valid HTTPS origin.'); }
+    if (productionUrl.protocol !== 'https:' || !productionUrl.hostname
+        || ['localhost', '127.0.0.1'].includes(productionUrl.hostname)
+        || productionUrl.username || productionUrl.password
+        || !['', '/'].includes(productionUrl.pathname) || productionUrl.search || productionUrl.hash) {
+      throw new Error('Production VITE_API_BASE_URL must be a public HTTPS origin without credentials or a path.');
+    }
+    return productionUrl.origin;
+  }
+  const configured = (configuredValue ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
   const loopbackHosts = new Set(['localhost', '127.0.0.1']);
   if (!loopbackHosts.has(pageHostname)) return configured;
 
@@ -391,7 +441,14 @@ export function resolveApiBaseUrl(configuredBaseUrl: string | undefined, pageHos
   }
 }
 
-const baseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, window.location.hostname);
+export const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
+const baseUrl = resolveApiBaseUrl(
+  import.meta.env.VITE_API_BASE_URL,
+  window.location.hostname,
+  import.meta.env.PROD,
+  demoModeEnabled,
+  import.meta.env.VITE_DEMO_API_BASE_URL,
+);
 let csrfToken = '';
 
 export class ApiError extends Error {
@@ -490,6 +547,33 @@ export function getNisrStatistics() { return api<NisrStatistics>('/v1/agricultur
 
 export function signIn(email: string, password: string) {
   return api<Farmer>('/v1/browser-auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+export interface DemoAccountCredentials {
+  loginIdentifier: string;
+  password: string;
+}
+
+export async function getDemoAccountCredentials(): Promise<DemoAccountCredentials> {
+  if (!demoModeEnabled) throw new Error('Demo account details are available only in an explicitly enabled demo build.');
+  let response: unknown;
+  try { response = await api<unknown>('/v1/demo/public-config'); }
+  catch {
+    throw new Error('Demo account details are unavailable. The demo service has not confirmed its synthetic-only isolation.');
+  }
+  if (!response || typeof response !== 'object') {
+    throw new Error('Demo account details are unavailable. The demo service has not confirmed its synthetic-only isolation.');
+  }
+  const config = response as Record<string, unknown>;
+  const loginIdentifier = config.login_identifier;
+  const password = config.password;
+  const isValidIdentifier = typeof loginIdentifier === 'string'
+    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginIdentifier);
+  if (config.environment !== 'demo' || config.demo_enabled !== true
+      || config.isolation_verified !== true || config.synthetic_data_only !== true
+      || !isValidIdentifier || typeof password !== 'string' || password.length < 1 || password.length > 128) {
+    throw new Error('Demo account details are unavailable. The demo service has not confirmed its synthetic-only isolation.');
+  }
+  return { loginIdentifier, password };
 }
 export function registerAccount(email: string, password: string, displayName: string, privacyAccepted: boolean) {
   return api<Farmer>('/v1/browser-auth/register', { method: 'POST', body: JSON.stringify({

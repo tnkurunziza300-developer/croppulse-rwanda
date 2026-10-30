@@ -10,7 +10,7 @@
 - `/health` makes a database readiness query and returns only a generic health response. It does not report migration readiness or uptime history.
 - React builds to `frontend/dist`; `/v1/*` must reach FastAPI without static caching. Streamlit remains a separate service and needs WebSocket proxying; use one private HTTPS host with route separation so the host-only session cookie is shared only by trusted CropPulse services.
 - The React frontend requires the public `VITE_API_BASE_URL`. A production build now rejects sensitive `VITE_*` environment names.
-- The current local `.env`/`.env.local` files are ignored working-copy configuration. Do not copy them to staging. The prior login UI read and rendered a demo password from a `VITE_*` variable; Phase 25 removes that behavior. If any such demo credential was used publicly, rotate it at its account authority.
+- The current local `.env`/`.env.local` files are ignored working-copy configuration. Do not copy them to staging. The login UI intentionally displays a public demo account credential at the user's request; it is embedded in the public React source and bundle. Treat it as fully public and use only an account containing synthetic data, with no private farmer records or privileges. Rotate/disable it if it is not intended for public use. Credentials injected through `VITE_*` variables are rejected by the production build guard.
 - General API rate/concurrency limits, TLS termination, proxy header trust, monitoring, and backups are not provided by the application. They must be configured at the private gateway/hosting layer.
 
 ## Deployment topology to implement in a private environment
@@ -55,10 +55,26 @@ python scripts/staging_preflight.py --expected-prior-revision 0019_soil_records
 # Only after a protected verified backup and a passing preflight:
 python -m alembic upgrade head
 python -m alembic current
-Invoke-RestMethod -Method Get -Uri 'https://<private-staging-host>/health'
 ```
 
 If the planned release expects a different prior revision, stop and update the reviewed change plan rather than guessing. `scripts/staging_preflight.py` validates the staging runtime configuration and performs a read-only target inspection; it never applies migrations. For SQLite, it refuses to create a missing target. Its PostgreSQL diagnostic runs in a read-only transaction. Do not paste diagnostic output containing a local path into public logs.
+
+After migration, start the services in separate managed service shells with their staging secrets injected:
+
+```powershell
+# FastAPI shell (run from repository root)
+$env:CROP_PULSE_API_URL = 'http://127.0.0.1:8000'
+$env:CROP_PULSE_REACT_URL = 'https://<private-staging-host>'
+python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000 --workers 1
+
+# Streamlit shell (same staging secret/database/API environment)
+streamlit run app.py --server.address 127.0.0.1 --server.port 8501 --server.baseUrlPath planning
+
+# From a separate verification shell after the API and proxy are ready:
+Invoke-RestMethod -Method Get -Uri 'https://<private-staging-host>/health'
+```
+
+Use the service manager's stop/restart controls; a foreground local smoke process can be stopped with `Ctrl+C` in its own shell. The React static assets are served by the private reverse proxy from `frontend/dist`; Vite's dev server is not a staging web server. Verify the proxy's SPA fallback, `/v1/*`, `/health`, `/planning/*`, and Streamlit WebSocket upgrade before routing synthetic users.
 
 ### Backup and restore gate
 

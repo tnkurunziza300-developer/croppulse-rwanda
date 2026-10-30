@@ -19,7 +19,7 @@ describe('React authentication and role navigation', () => {
     else Reflect.deleteProperty(navigator, 'geolocation');
   });
 
-  it('never renders demo credentials injected through client environment variables', async () => {
+  it('keeps the farmer login free of shared demo credentials', async () => {
     vi.stubEnv('VITE_DEMO_ACCOUNT_EMAIL', 'private-demo@example.test');
     vi.stubEnv('VITE_DEMO_ACCOUNT_PASSWORD', 'synthetic-demo-password');
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
@@ -30,11 +30,23 @@ describe('React authentication and role navigation', () => {
     }));
 
     render(<MemoryRouter><App /></MemoryRouter>);
-    render(<MemoryRouter><App /></MemoryRouter>);
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Demo Account' })).toBeInTheDocument();
+    expect(screen.getByText(/Example only — these placeholder values are not a working account/)).toBeInTheDocument();
+    expect(screen.getByText('demo@example.invalid')).toBeInTheDocument();
+    expect(screen.getByText('Not-a-working-login')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use Demo Account' })).not.toBeInTheDocument();
+    const demoPanel = screen.getByRole('region', { name: 'Demo Account' });
+    const createAccount = screen.getByRole('button', { name: 'Create account' });
+    const forgotPassword = screen.getByRole('button', { name: 'Forgot password?' });
+    expect(createAccount.compareDocumentPosition(demoPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(forgotPassword.compareDocumentPosition(demoPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Demo sign-in details' })).not.toBeInTheDocument();
     expect(screen.queryByText('private-demo@example.test')).not.toBeInTheDocument();
     expect(screen.queryByText('synthetic-demo-password')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Try a demo account' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Demo credentials below are public/)).not.toBeInTheDocument();
   });
 
   it('shows the demo farmer normal saved-workflow overview without a separate walkthrough', async () => {

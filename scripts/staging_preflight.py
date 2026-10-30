@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import sys
 from typing import Any
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.diagnostics import inspect_database
 from backend.runtime_config import validate_runtime_config
@@ -11,7 +16,19 @@ from backend.runtime_config import validate_runtime_config
 
 def check_target(expected_prior_revision: str, configured_url: str | None = None) -> dict[str, Any]:
     """Check connection, expected prior revision, and integrity without writing."""
-    result = inspect_database(configured_url)
+    try:
+        result = inspect_database(configured_url)
+    except Exception:
+        # URL parsing and diagnostics can fail before a structured result exists.
+        # Keep the helper fail-closed and never echo URLs or driver details.
+        result = {
+            "backend": "unknown",
+            "connection": "failed; details omitted",
+            "revision": "unknown",
+            "revision_check": "failed; details omitted",
+            "integrity": "not checked",
+            "foreign_key_violations": "not checked",
+        }
     revision_matches = result.get("revision") == expected_prior_revision
     integrity_ok = result.get("integrity") in {"ok", "not applicable"}
     foreign_keys_ok = result.get("foreign_key_violations") in {0, "not applicable"}

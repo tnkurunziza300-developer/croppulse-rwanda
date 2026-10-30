@@ -111,6 +111,7 @@ button.directory-person:hover{background:#f5f9f6}
 
 @media(max-width:760px){.auth-screen{display:block;width:100%;max-width:100%;overflow-x:hidden}.auth-story,.auth-panel{width:100%;min-width:0}.auth-panel{justify-items:stretch}.auth-card{width:calc(100vw - 44px);max-width:390px;margin-left:0}.form-stack>label{min-width:0}.form-stack input{width:100%;min-width:0}}
 @media(max-width:420px){.auth-switch{display:flex;flex-wrap:wrap;justify-content:center;gap:7px}.auth-switch button{margin:0}}
+.demo-access-panel{margin-top:18px;padding:15px;border:1px solid var(--line);border-radius:10px;background:#f8faf8}.demo-access-panel h3{font-size:14px;margin:7px 0}.demo-access-panel p{font-size:11px;line-height:1.5;color:var(--muted)}.demo-access-panel dl{margin:10px 0;display:grid;gap:7px}.demo-access-panel dl>div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;font-size:11px}.demo-access-panel dt{color:var(--muted)}.demo-access-panel dd{margin:0;overflow-wrap:anywhere;font-weight:600}
 
 
 

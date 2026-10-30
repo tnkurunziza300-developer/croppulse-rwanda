@@ -78,6 +78,8 @@ py -3.12 -m venv .venv
 The local launcher starts the current FastAPI service on `127.0.0.1:8001` when needed, sets `CROP_PULSE_API_URL` for Streamlit, and stops the API it started when Streamlit exits. Before reuse, it checks API health, browser CSRF signing, CORS, and both handoff directions. Run it from PowerShell after installing dependencies and applying database migrations. For the React + API workspace, use the [Windows setup guide](docs/react-app-setup.md). React is the only password login and registration page; Streamlit redirects unauthenticated users to React and returns them to their requested workspace after sign-in. The [crop-growth workflow audit and phased backlog](docs/crop-growth-workflow-audit.md) describes connected records and remaining work.
 macOS/Linux: `source .venv/bin/activate`.
 
+Private staging has not been deployed. See the [Phase 25 staging preparation runbook](docs/private-staging-runbook-phase-25.md) for configuration, read-only migration preflight, backup/restore, smoke checks, and release blockers. The login page displays a public demonstration account; assume its credential is visible to every visitor and use it only with synthetic data.
+
 ## Structure
 `knowledge.py` (crop and zone knowledge pack: add other countries here) · `plan.py` (planning pages) · `views.py` (Data Lab pages) · `utils/` (loading, validation, geography, metrics, priority) · `tests/` · `demo/` (webinar/demo recording; add the video when ready).
 

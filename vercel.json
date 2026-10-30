@@ -1,0 +1,49 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "api": {
+      "root": ".",
+      "framework": "fastapi",
+      "entrypoint": "backend.api:app"
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite"
+    },
+    "planner": {
+      "root": ".",
+      "runtime": "container",
+      "entrypoint": "deployment/Dockerfile.streamlit",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "CROP_PULSE_API_URL"
+        }
+      ]
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": { "service": "api" }
+    },
+    {
+      "source": "/v1/(.*)",
+      "destination": { "service": "api" }
+    },
+    {
+      "source": "/planner",
+      "destination": { "service": "planner" }
+    },
+    {
+      "source": "/planner/(.*)",
+      "destination": { "service": "planner" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "service": "frontend" }
+    }
+  ]
+}

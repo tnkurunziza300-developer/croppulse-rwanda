@@ -597,8 +597,23 @@ def validate_pack(*, today: date | None = None) -> dict[str, Any]:
 def build_manifest() -> dict[str, Any]:
     """Create a deterministic manifest for validated pack inputs (no timestamp)."""
     files = {}
+    pack_root = Path(PACK_DIR).resolve(strict=True)
+    project_root = Path(ROOT).resolve(strict=True)
     for path in (SCHEMA_PATH, SOURCES_PATH, STATEMENTS_PATH, RULES_PATH, DECISIONS_PATH, ISSUES_PATH):
-        files[path.relative_to(ROOT).as_posix()] = _sha256(path)
+        resolved_path = Path(path).resolve(strict=True)
+        try:
+            pack_relative = resolved_path.relative_to(pack_root)
+        except ValueError as exc:
+            raise ValueError("Agronomy manifest inputs must remain inside the configured pack directory.") from exc
+
+        # Production paths retain their established repository-relative keys. An isolated
+        # fixture pack outside the repository uses only its local relative names, never an
+        # absolute temp path. In both cases the resolved input must be inside PACK_DIR.
+        try:
+            manifest_path = resolved_path.relative_to(project_root)
+        except ValueError:
+            manifest_path = pack_relative
+        files[manifest_path.as_posix()] = _sha256(resolved_path)
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
     rules = _read(RULES_PATH).get("rules", [])
     return {"dataset_version": DATASET_VERSION, "schema_version": "1.0",

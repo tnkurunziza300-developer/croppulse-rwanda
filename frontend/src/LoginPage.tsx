@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, Leaf, ShieldCheck } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
-import { completePasswordReset, confirmEmailChange, requestPasswordRecovery } from './api';
+import { completePasswordReset, confirmEmailChange, demoModeEnabled, getDemoAccountCredentials, requestPasswordRecovery } from './api';
 import { useAuth } from './auth';
 
 type AuthMode = 'login' | 'register' | 'recovery' | 'reset' | 'confirm-email-change';
@@ -18,10 +18,32 @@ export function LoginPage({ serviceError }: { serviceError: string }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
+  const [demoState, setDemoState] = useState<'disabled' | 'checking' | 'ready' | 'unavailable'>(demoModeEnabled ? 'checking' : 'disabled');
+  const [demoCredentials, setDemoCredentials] = useState<{ loginIdentifier: string; password: string } | null>(null);
   const actionToken = new URLSearchParams(location.search).get('token') ?? '';
+
+  useEffect(() => {
+    if (!demoModeEnabled || mode !== 'login') return;
+    let active = true;
+    setDemoState('checking');
+    void getDemoAccountCredentials().then((credentials) => {
+      if (!active) return;
+      setDemoCredentials(credentials);
+      setDemoState('ready');
+    }).catch(() => {
+      if (!active) return;
+      setDemoCredentials(null);
+      setDemoState('unavailable');
+    });
+    return () => { active = false; };
+  }, [mode]);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setSuccess('');
+    if (demoModeEnabled && demoState !== 'ready') {
+      setError('Demo sign-in is disabled until the demo service verifies its synthetic-only data isolation.');
+      return;
+    }
     if (mode === 'register' && !accepted) { setError('Please accept the account data notice to continue.'); return; }
     if (mode === 'reset' && password !== confirmPassword) { setError('The passwords do not match.'); return; }
     setBusy(true);
@@ -62,10 +84,29 @@ export function LoginPage({ serviceError }: { serviceError: string }) {
         {mode === 'reset' && <label>Confirm new password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={12} maxLength={128} /></label>}
         {mode === 'register' && <label className="check-label"><input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} /><span>I have read and accept the <a href="/privacy-notice.html" target="_blank" rel="noreferrer">account data notice</a>.</span></label>}
         {mode === 'confirm-email-change' && <p className="notice notice-info">This confirmation link expires after 30 minutes and can be used once.</p>}
-        <button className="button button-primary auth-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'recovery' ? 'Send reset link' : mode === 'reset' ? 'Save new password' : 'Confirm email change'}<ArrowRight size={17} /></button>
+        <button className="button button-primary auth-submit" type="submit" disabled={busy || (demoModeEnabled && demoState !== 'ready')}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'recovery' ? 'Send reset link' : mode === 'reset' ? 'Save new password' : 'Confirm email change'}<ArrowRight size={17} /></button>
       </form>
       <div className="auth-switch">{mode === 'login' ? <>New to CropPulse? <button type="button" onClick={() => { setMode('register'); setError(''); setSuccess(''); }}>Create account</button><button type="button" onClick={() => { setMode('recovery'); setError(''); setSuccess(''); }}>Forgot password?</button></> : mode === 'register' ? <>Already have an account? <button type="button" onClick={() => { setMode('login'); setError(''); setSuccess(''); }}>Sign in</button></> : <button type="button" onClick={() => { setMode('login'); setError(''); setSuccess(''); }}>Return to sign in</button>}</div>
-      <div className="auth-note"><ShieldCheck size={15} /><span>Secure, role-based access. No passwords are stored in this browser.</span></div>
+      {mode === 'login' && <section className="demo-access-panel" aria-labelledby="demo-account-title">
+        <span className="eyebrow">{demoModeEnabled && demoState === 'ready' ? 'SYNTHETIC DATA ENVIRONMENT' : 'DEMO ACCESS'}</span>
+        <h3 id="demo-account-title">Demo Account</h3>
+        {!demoModeEnabled && <>
+          <p>Example only — these placeholder values are not a working account. Demo sign-in stays disabled in this farmer build until an isolated service verifies synthetic-only data.</p>
+          <dl aria-label="Nonfunctional demo placeholders">
+            <div><dt>Login identifier</dt><dd>demo@example.invalid</dd></div>
+            <div><dt>Password</dt><dd>Not-a-working-login</dd></div>
+          </dl>
+        </>}
+        {demoModeEnabled && demoState === 'checking' && <p role="status">Checking isolated demo configuration…</p>}
+        {demoModeEnabled && demoState === 'unavailable' && <p role="alert">Demo access is disabled because this service has not verified its synthetic-only data isolation.</p>}
+        {demoModeEnabled && demoState === 'ready' && demoCredentials && <>
+          <p>Use these details in the sign-in form. This account connects only to the verified demo service.</p>
+          <dl><div><dt>Login identifier</dt><dd>{demoCredentials.loginIdentifier}</dd></div><div><dt>Password</dt><dd>{demoCredentials.password}</dd></div></dl>
+          <button className="button button-secondary" type="button" onClick={() => { setEmail(demoCredentials.loginIdentifier); setPassword(demoCredentials.password); setError(''); }}>Use Demo Account</button>
+        </>}
+      </section>}
+      {demoModeEnabled && <div className="notice notice-info" role="note">Demo environment: use synthetic data only. This build connects only to the separately configured demo service.</div>}
+      <div className="auth-note"><ShieldCheck size={15} /><span>Your sign-in password is not saved to this device.</span></div>
     </div></section>
   </div>;
 }

@@ -1,5 +1,6 @@
 import json
 from datetime import date
+from pathlib import Path
 
 from utils import agronomy_knowledge as ak
 
@@ -61,6 +62,51 @@ def test_existing_pack_has_sources_but_no_approved_rules_and_keeps_nisr_separate
     assert report["coverage"]["districts_total"] == 30
     assert report["coverage"]["districts_with_approved_rules"] == []
     assert ak.approved_rules_for("Maize", "Huye", "A", today=date(2026, 10, 22)) == []
+
+
+def test_build_manifest_keeps_production_paths_project_relative():
+    manifest = ak.build_manifest()
+
+    assert set(manifest["files"]) == {
+        "data/agronomy/schema.json",
+        "data/agronomy/sources.json",
+        "data/agronomy/statements.json",
+        "data/agronomy/rules.json",
+        "data/agronomy/review_decisions.json",
+        "data/agronomy/quality_issues.json",
+    }
+    assert all(not path.startswith(("/", "\\\\")) for path in manifest["files"])
+
+
+def test_build_manifest_for_external_fixture_uses_pack_relative_paths(tmp_path, monkeypatch):
+    _fixture_pack(tmp_path, monkeypatch)
+    monkeypatch.setattr(ak, "ROOT", tmp_path / "separate-project-root")
+    (tmp_path / "separate-project-root").mkdir()
+
+    manifest = ak.build_manifest()
+
+    assert set(manifest["files"]) == {
+        "schema.json", "sources.json", "statements.json", "rules.json",
+        "review_decisions.json", "quality_issues.json",
+    }
+    assert all(not Path(path).is_absolute() for path in manifest["files"])
+    assert all(str(tmp_path) not in path for path in manifest["files"])
+    (tmp_path / "MANIFEST.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert ak.validate_pack(today=date(2026, 10, 22))["manifest_status"] == "current"
+
+
+def test_build_manifest_rejects_an_input_outside_the_configured_pack(tmp_path, monkeypatch):
+    _fixture_pack(tmp_path, monkeypatch)
+    outside = tmp_path.parent / f"{tmp_path.name}-outside-schema.json"
+    outside.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(ak, "SCHEMA_PATH", outside)
+
+    try:
+        ak.build_manifest()
+    except ValueError as exc:
+        assert "inside the configured pack directory" in str(exc)
+    else:
+        raise AssertionError("manifest creation must reject inputs outside the configured pack")
 
 
 def test_nisr_source_registry_checksum_mismatch_fails_validation(tmp_path, monkeypatch):
