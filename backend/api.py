@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .db import Base, get_db, get_engine
+from .diagnostics import migration_heads
 from . import models
 from . import account_mail
 from .crop_disease_model import screen_crop_image
@@ -123,6 +124,117 @@ PLAN_STATUS_TRANSITIONS = {
 }
 
 
+def _safe_diagnostic_identifier(value) -> str:
+    if (not isinstance(value, str) or not value or not value.isascii()
+            or not all(character.isalnum() or character == "_" for character in value)):
+        return "unavailable"
+    return value
+
+
+def _temporary_database_diagnostic():
+    if os.environ.get("CROP_PULSE_TEMP_DB_DIAGNOSTIC") != "1":
+        return
+
+    logger = logging.getLogger(__name__)
+    try:
+        expected_revisions = sorted(migration_heads())
+        if not expected_revisions or any(
+            _safe_diagnostic_identifier(revision) == "unavailable"
+            for revision in expected_revisions
+        ):
+            raise RuntimeError("Repository migration head unavailable.")
+
+        engine = get_engine()
+        if engine.dialect.name != "postgresql":
+            raise RuntimeError("Temporary diagnostic requires PostgreSQL.")
+
+        tables = ("farmers", "farms", "crop_plans", "farm_activities", "alembic_version")
+        resolved_relation_sql = text(
+            "SELECT namespace.nspname, relation.relkind "
+            "FROM pg_catalog.pg_class AS relation "
+            "JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace "
+            "WHERE relation.oid = pg_catalog.to_regclass(:relation_name)"
+        )
+        revisions = []
+        resolved_schemas = {}
+        effective_schemas = []
+        active_schema = "unavailable"
+        with engine.connect() as connection:
+            with connection.begin():
+                connection.execute(text("SET TRANSACTION READ ONLY"))
+                connection.execute(text("SELECT 1")).scalar_one()
+                active_schema = _safe_diagnostic_identifier(
+                    connection.execute(text("SELECT current_schema()")).scalar_one_or_none()
+                )
+                search_path_result = connection.execute(
+                    text("SELECT current_schemas(true)")
+                ).scalar_one_or_none()
+                if isinstance(search_path_result, (list, tuple)):
+                    effective_schemas = [
+                        _safe_diagnostic_identifier(schema)
+                        for schema in search_path_result
+                    ]
+                for table in tables:
+                    resolved_relation = connection.execute(
+                        resolved_relation_sql, {"relation_name": table}
+                    ).scalar_one_or_none()
+                    if resolved_relation is None:
+                        resolved_schemas[table] = "missing"
+                    else:
+                        resolved_schema, relation_kind = resolved_relation
+                        resolved_schemas[table] = (
+                            _safe_diagnostic_identifier(resolved_schema)
+                            if relation_kind in {"r", "p"}
+                            else "not_a_table"
+                        )
+                if resolved_schemas["alembic_version"] not in {
+                    "missing", "unavailable", "not_a_table"
+                }:
+                    # The fixed unqualified name resolves through the same connection search_path
+                    # as to_regclass above; no schema identifier is interpolated into SQL.
+                    revisions = connection.execute(
+                        text("SELECT version_num FROM alembic_version")
+                    ).scalars().all()
+
+        safe_revisions = sorted(
+            _safe_diagnostic_identifier(revision) for revision in revisions
+        )
+        revision_safe = bool(safe_revisions) and "unavailable" not in safe_revisions
+        current_revision = ",".join(safe_revisions) if revision_safe else "unavailable"
+        revision_matches = revision_safe and safe_revisions == expected_revisions
+        expected_revision = ",".join(expected_revisions)
+        logger.info(
+            "Temporary database diagnostic "
+            "(connection=ok, schema=%s, effective_schemas=%s, revision=%s, "
+            "expected_revision=%s, revision_matches=%s, farmers_schema=%s, "
+            "farms_schema=%s, crop_plans_schema=%s, farm_activities_schema=%s, "
+            "alembic_version_schema=%s)",
+            active_schema,
+            ",".join(effective_schemas) if effective_schemas else "unavailable",
+            current_revision,
+            expected_revision,
+            str(revision_matches).lower(),
+            resolved_schemas["farmers"],
+            resolved_schemas["farms"],
+            resolved_schemas["crop_plans"],
+            resolved_schemas["farm_activities"],
+            resolved_schemas["alembic_version"],
+        )
+    except Exception as exc:
+        driver_error = getattr(exc, "orig", None)
+        sqlstate = getattr(driver_error, "sqlstate", None) or getattr(driver_error, "pgcode", None)
+        if (not isinstance(sqlstate, str) or len(sqlstate) != 5
+                or not sqlstate.isascii() or not sqlstate.isalnum()):
+            sqlstate = "unavailable"
+        exception_class = _safe_diagnostic_identifier(type(exc).__name__)
+        logger.error(
+            "Temporary database diagnostic failed "
+            "(exception_class=%s, sqlstate=%s)",
+            exception_class,
+            sqlstate,
+        )
+
+
 def _rate_bucket(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -163,6 +275,7 @@ def _record_registration_attempt(request: Request, db: Session):
 async def lifespan(_app):
     # Authentication endpoints must not start in a state where CSRF/JWT signing fails at request time.
     validate_runtime_config()
+    _temporary_database_diagnostic()
     # Development convenience only. Deployments must apply Alembic migrations.
     if os.environ.get("CROP_PULSE_AUTO_CREATE_SCHEMA") == "1":
         Base.metadata.create_all(get_engine())

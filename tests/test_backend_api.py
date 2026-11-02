@@ -1,7 +1,9 @@
 import pytest
 import jwt
 import backend.api as api_module
+import asyncio
 from datetime import date, datetime, timedelta, timezone
+from contextlib import nullcontext
 from fastapi.testclient import TestClient
 from pathlib import Path
 from uuid import uuid4
@@ -436,6 +438,165 @@ def test_database_failure_logs_only_safe_postgres_table_diagnostics(
     assert "sensitive connection" not in caplog.text
     assert "SQL details" not in response.text
     assert "SQL details" not in caplog.text
+
+
+def test_temporary_database_diagnostic_is_disabled_without_exact_flag(monkeypatch, caplog):
+    monkeypatch.delenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", raising=False)
+    monkeypatch.setattr(
+        api_module, "get_engine",
+        lambda: pytest.fail("disabled diagnostics must not access the engine"),
+    )
+    api_module._temporary_database_diagnostic()
+    assert "Temporary database diagnostic" not in caplog.text
+
+    monkeypatch.setenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", "true")
+    api_module._temporary_database_diagnostic()
+    assert "Temporary database diagnostic" not in caplog.text
+
+
+def test_temporary_database_diagnostic_checks_read_only_schema_tables_and_revision(
+    monkeypatch, caplog
+):
+    caplog.set_level("INFO")
+    executed = []
+    resolved_relations = {
+        "farmers": ("public", "r"),
+        "farms": ("tenant", "p"),
+        "crop_plans": None,
+        "farm_activities": ("public", "v"),
+        "alembic_version": ("migrations", "r"),
+    }
+    expected_tables = set(resolved_relations)
+
+    class Result:
+        def __init__(self, value=None, values=None):
+            self.value = value
+            self.values = values or []
+
+        def scalar_one(self):
+            return self.value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self.values
+
+    class Connection:
+        dialect = type("Dialect", (), {"name": "postgresql"})()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def begin(self):
+            return nullcontext()
+
+        def execute(self, statement, parameters=None):
+            sql = str(statement)
+            executed.append((sql, parameters))
+            if sql == "SELECT 1":
+                return Result(1)
+            if sql == "SELECT current_schema()":
+                return Result("public")
+            if sql == "SELECT current_schemas(true)":
+                return Result(["pg_catalog", "public", "tenant", "migrations", "private schema"])
+            if ("pg_catalog.pg_class" in sql
+                    and "pg_catalog.to_regclass(:relation_name)" in sql):
+                table_name = parameters["relation_name"]
+                assert table_name in expected_tables
+                return Result(resolved_relations[table_name])
+            if sql == "SELECT version_num FROM alembic_version":
+                assert resolved_relations["alembic_version"] == ("migrations", "r")
+                return Result(values=["0020_agronomy_review_workflow"])
+            return Result()
+
+    class Engine:
+        dialect = Connection.dialect
+
+        def connect(self):
+            return Connection()
+
+    monkeypatch.setenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", "1")
+    monkeypatch.setattr(api_module, "get_engine", lambda: Engine())
+    monkeypatch.setattr(
+        api_module, "migration_heads", lambda: ["0020_agronomy_review_workflow"]
+    )
+
+    api_module._temporary_database_diagnostic()
+
+    assert executed[0][0] == "SET TRANSACTION READ ONLY"
+    catalog_checks = [
+        parameters["relation_name"] for sql, parameters in executed
+        if ("pg_catalog.pg_class" in sql
+            and "pg_catalog.to_regclass(:relation_name)" in sql)
+    ]
+    assert set(catalog_checks) == expected_tables
+    revision_query_index = [sql for sql, _ in executed].index(
+        "SELECT version_num FROM alembic_version"
+    )
+    alembic_resolution_index = next(
+        index for index, (sql, params) in enumerate(executed)
+        if ("pg_catalog.pg_class" in sql
+            and "pg_catalog.to_regclass(:relation_name)" in sql)
+        and params["relation_name"] == "alembic_version"
+    )
+    assert alembic_resolution_index < revision_query_index
+    assert "SELECT current_schema()" in [sql for sql, _ in executed]
+    assert "SELECT current_schemas(true)" in [sql for sql, _ in executed]
+    assert "SELECT version_num FROM alembic_version" in [sql for sql, _ in executed]
+    assert "Temporary database diagnostic" in caplog.text
+    assert "connection=ok" in caplog.text
+    assert "schema=public" in caplog.text
+    assert "effective_schemas=pg_catalog,public,tenant,migrations,unavailable" in caplog.text
+    assert "private schema" not in caplog.text
+    assert "revision=0020_agronomy_review_workflow" in caplog.text
+    assert "expected_revision=0020_agronomy_review_workflow" in caplog.text
+    assert "revision_matches=true" in caplog.text
+    assert "farmers_schema=public" in caplog.text
+    assert "farms_schema=tenant" in caplog.text
+    assert "crop_plans_schema=missing" in caplog.text
+    assert "farm_activities_schema=not_a_table" in caplog.text
+    assert "alembic_version_schema=migrations" in caplog.text
+
+
+def test_temporary_database_diagnostic_failure_is_safe_and_does_not_block_startup(
+    monkeypatch, caplog
+):
+    class DriverError:
+        sqlstate = "42P01"
+
+    class BrokenEngine:
+        dialect = type("Dialect", (), {"name": "postgresql"})()
+
+        def connect(self):
+            error = SQLAlchemyError(
+                "postgresql://private-user:private-password@host/db; SELECT private_data"
+            )
+            error.orig = DriverError()
+            raise error
+
+    monkeypatch.setenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", "1")
+    monkeypatch.setenv("CROP_PULSE_AUTO_CREATE_SCHEMA", "0")
+    monkeypatch.setattr(api_module, "validate_runtime_config", lambda: None)
+    monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
+
+    async def start_api():
+        async with api_module.lifespan(api_module.app):
+            return "started"
+
+    assert asyncio.run(start_api()) == "started"
+    assert "exception_class=SQLAlchemyError" in caplog.text
+    assert "sqlstate=42P01" in caplog.text
+    for private_value in (
+        "postgresql://", "private-user", "private-password", "private_data", "SELECT",
+    ):
+        assert private_value not in caplog.text
 
 
 @pytest.mark.parametrize(
