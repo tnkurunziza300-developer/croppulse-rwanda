@@ -51,3 +51,8 @@ def _cookie_secure() -> bool:
     if configured is not None:
         return configured.lower() in {"1", "true", "yes"}
     return False
+
+
+def _cookie_samesite() -> str:
+    """Use cross-site cookies only when the corresponding Secure flag is enabled."""
+    return "none" if _cookie_secure() else "lax"

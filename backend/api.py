@@ -33,7 +33,7 @@ from . import models
 from . import account_mail
 from .crop_disease_model import screen_crop_image
 from .crop_health_guidance import attach_guidance
-from .runtime_config import _cookie_secure, _secret, validate_runtime_config
+from .runtime_config import _cookie_secure, _cookie_samesite, _secret, validate_runtime_config
 from .schemas import (ActivityCreate, ActivityOut, ActivityUpdate, Credentials, LoginCredentials, EmailChangeRequest, AccountActionTokenInput,
                       PasswordRecoveryRequest, PasswordResetRequest, AccountDeletionRequest, FarmCreate, FarmOut, FarmUpdate,
                       FarmerOut, PlanCreate, PlanOut, PlanUpdate, PlanStatusUpdate, FieldCreate, FieldOut, TokenResponse, AccountStatusUpdate,
@@ -206,7 +206,14 @@ def _check_csrf(request: Request):
 
 def _set_browser_session(response: Response, token: str):
     response.set_cookie("cp_session", token, max_age=1800, httponly=True, secure=_cookie_secure(),
-                        samesite="lax", path="/")
+                        samesite=_cookie_samesite(), path="/")
+
+
+def _delete_browser_cookies(response: Response):
+    response.delete_cookie("cp_session", path="/", secure=_cookie_secure(), httponly=True,
+                           samesite=_cookie_samesite())
+    response.delete_cookie("cp_csrf", path="/v1", secure=_cookie_secure(), httponly=False,
+                           samesite=_cookie_samesite())
 
 
 @app.exception_handler(RequestValidationError)
@@ -847,7 +854,7 @@ def browser_csrf(response: Response):
     signature = hmac.new(_secret().encode(), nonce.encode(), "sha256").hexdigest()
     token = f"{nonce}.{signature}"
     response.set_cookie("cp_csrf", token, max_age=1800, httponly=False, secure=_cookie_secure(),
-                        samesite="lax", path="/v1")
+                        samesite=_cookie_samesite(), path="/v1")
     return {"csrf_token": token}
 
 
@@ -876,8 +883,7 @@ def browser_logout(request: Request, response: Response, farmer: models.Farmer =
     session_record = db.get(models.FarmerSession, claims["jti"])
     session_record.revoked_at = datetime.now(timezone.utc)
     db.commit()
-    response.delete_cookie("cp_session", path="/", secure=_cookie_secure(), httponly=True, samesite="lax")
-    response.delete_cookie("cp_csrf", path="/v1", secure=_cookie_secure(), httponly=False, samesite="lax")
+    _delete_browser_cookies(response)
 
 
 def _account_action_attempt(request: Request, email: str, purpose: str, db: Session):
@@ -982,8 +988,7 @@ def confirm_email_change(body: AccountActionTokenInput, response: Response, db: 
     row.used_at = now
     _revoke_farmer_sessions(db, farmer.id, now)
     db.commit()
-    response.delete_cookie("cp_session", path="/", secure=_cookie_secure(), httponly=True, samesite="lax")
-    response.delete_cookie("cp_csrf", path="/v1", secure=_cookie_secure(), httponly=False, samesite="lax")
+    _delete_browser_cookies(response)
     return {"message": "Email address updated. Sign in again with the new address."}
 
 
@@ -1012,8 +1017,7 @@ def complete_password_reset(body: PasswordResetRequest, response: Response, db: 
     row.used_at = now
     _revoke_farmer_sessions(db, farmer.id, now)
     db.commit()
-    response.delete_cookie("cp_session", path="/", secure=_cookie_secure(), httponly=True, samesite="lax")
-    response.delete_cookie("cp_csrf", path="/v1", secure=_cookie_secure(), httponly=False, samesite="lax")
+    _delete_browser_cookies(response)
     return {"message": "Password reset. Sign in with your new password."}
 
 
@@ -1035,8 +1039,7 @@ def delete_own_account(body: AccountDeletionRequest, request: Request, response:
     ))
     db.delete(farmer)
     db.commit()
-    response.delete_cookie("cp_session", path="/", secure=_cookie_secure(), httponly=True, samesite="lax")
-    response.delete_cookie("cp_csrf", path="/v1", secure=_cookie_secure(), httponly=False, samesite="lax")
+    _delete_browser_cookies(response)
 
 
 @app.post("/v1/auth/logout", status_code=204)

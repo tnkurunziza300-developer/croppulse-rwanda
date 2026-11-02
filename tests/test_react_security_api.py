@@ -21,7 +21,8 @@ def make_role(email, role):
         return farmer.id
 
 
-def test_browser_auth_cookie_refresh_csrf_and_logout(api_client):
+def test_browser_auth_cookie_refresh_csrf_and_logout(api_client, monkeypatch):
+    monkeypatch.setenv("CROP_PULSE_COOKIE_SECURE", "0")
     register(api_client, "browser@example.com")
     csrf = api_client.get("/v1/browser-auth/csrf", headers={"Origin": "http://127.0.0.1:5173"})
     assert csrf.status_code == 200
@@ -29,6 +30,8 @@ def test_browser_auth_cookie_refresh_csrf_and_logout(api_client):
     assert csrf.headers["cache-control"] == "no-store"
     token = csrf.json()["csrf_token"]
     assert api_client.cookies.get("cp_csrf") == token and len(token) > 32
+    csrf_cookie = csrf.headers["set-cookie"].lower()
+    assert "path=/v1" in csrf_cookie and "samesite=lax" in csrf_cookie and "secure" not in csrf_cookie
     invalid_login = api_client.post("/v1/browser-auth/login", json={
         "email": "browser@example.com", "password": "invalid-password"
     }, headers={"X-CSRF-Token": token})
@@ -41,7 +44,8 @@ def test_browser_auth_cookie_refresh_csrf_and_logout(api_client):
     cookie = login.cookies.get("cp_session")
     assert cookie
     set_cookie = login.headers["set-cookie"].lower()
-    assert "httponly" in set_cookie and "samesite=lax" in set_cookie and "max-age=1800" in set_cookie
+    assert ("httponly" in set_cookie and "samesite=lax" in set_cookie and "max-age=1800" in set_cookie
+            and "path=/" in set_cookie and "secure" not in set_cookie)
     api_client.cookies.delete("cp_csrf", path="/v1")
     api_client.cookies.set("cp_csrf", "forged-token", path="/v1")
     request = api_client.build_request("POST", "/v1/farms", headers={"X-CSRF-Token": "forged-token"})
@@ -62,7 +66,47 @@ def test_browser_auth_cookie_refresh_csrf_and_logout(api_client):
     assert logout_no_csrf.status_code == 403
     logout = api_client.post("/v1/browser-auth/logout", headers={"X-CSRF-Token": token})
     assert logout.status_code == 204
+    deleted_cookies = [cookie.lower() for cookie in logout.headers.get_list("set-cookie")]
+    assert any(cookie.startswith("cp_session=") and "path=/;" in cookie
+               and "samesite=lax" in cookie and "secure" not in cookie for cookie in deleted_cookies)
+    assert any(cookie.startswith("cp_csrf=") and "path=/v1;" in cookie
+               and "samesite=lax" in cookie and "secure" not in cookie for cookie in deleted_cookies)
     assert api_client.get("/v1/me").status_code == 401
+
+
+def test_production_browser_cookies_are_cross_site_secure_and_deletions_match(api_client, monkeypatch):
+    monkeypatch.setenv("CROP_PULSE_COOKIE_SECURE", "1")
+
+    csrf = api_client.get("/v1/browser-auth/csrf")
+    csrf_token = csrf.json()["csrf_token"]
+    csrf_cookie = csrf.headers["set-cookie"].lower()
+    assert "path=/v1" in csrf_cookie and "samesite=none" in csrf_cookie and "secure" in csrf_cookie
+    assert "httponly" not in csrf_cookie
+
+    registration = api_client.post("/v1/browser-auth/register", json={
+        "email": "production-browser@example.com", "password": "long-test-password-123",
+        "display_name": "Production Browser Farmer", "privacy_notice_accepted": True,
+    }, headers={"Cookie": f"cp_csrf={csrf_token}", "X-CSRF-Token": csrf_token})
+    assert registration.status_code == 201
+    assert "access_token" not in registration.json()
+    session_cookie = registration.cookies.get("cp_session")
+    session_set_cookie = registration.headers["set-cookie"].lower()
+    assert ("httponly" in session_set_cookie and "samesite=none" in session_set_cookie
+            and "secure" in session_set_cookie and "path=/" in session_set_cookie)
+
+    browser_cookies = f"cp_session={session_cookie}; cp_csrf={csrf_token}"
+    assert api_client.get("/v1/me", headers={"Cookie": browser_cookies}).status_code == 200
+    logout = api_client.post("/v1/browser-auth/logout", headers={
+        "Cookie": browser_cookies, "X-CSRF-Token": csrf_token,
+    })
+    assert logout.status_code == 204
+    deleted_cookies = [cookie.lower() for cookie in logout.headers.get_list("set-cookie")]
+    assert any(cookie.startswith("cp_session=") and "path=/;" in cookie
+               and "samesite=none" in cookie and "secure" in cookie and "httponly" in cookie
+               for cookie in deleted_cookies)
+    assert any(cookie.startswith("cp_csrf=") and "path=/v1;" in cookie
+               and "samesite=none" in cookie and "secure" in cookie and "httponly" not in cookie
+               for cookie in deleted_cookies)
 
 
 def test_api_startup_fails_clearly_when_signing_key_is_missing_or_insecure(monkeypatch):
