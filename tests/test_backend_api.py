@@ -377,14 +377,24 @@ def test_weather_alert_history_is_private_deduplicated_acknowledgeable_and_expir
     assert changed.json()["acknowledged_at"] is not None
 
 
-def test_health_hides_database_driver_details(api_client, monkeypatch):
+def test_health_hides_database_driver_details(api_client, monkeypatch, caplog):
     class BrokenEngine:
         def connect(self):
             raise SQLAlchemyError("private://db-password and SQL details")
+
     monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
     response = api_client.get("/health")
+
     assert response.status_code == 503
-    assert "private://" not in response.text and "db-password" not in response.text
+    assert "private://" not in response.text
+    assert "db-password" not in response.text
+
+    assert "Database request failed" in caplog.text
+    assert "SQLAlchemyError" in caplog.text
+    assert "sqlstate=unavailable" in caplog.text
+    assert "private://" not in caplog.text
+    assert "db-password" not in caplog.text
+    assert "SQL details" not in caplog.text
 
 
 def test_frontend_logout_clears_local_login_state():

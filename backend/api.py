@@ -225,8 +225,21 @@ async def safe_validation_error(_: Request, exc: RequestValidationError):
 
 
 @app.exception_handler(SQLAlchemyError)
-async def safe_database_error(_: Request, _exc: SQLAlchemyError):
-    # Avoid returning connection strings, SQL, farmer data, or driver traces to clients.
+async def safe_database_error(_: Request, exc: SQLAlchemyError):
+    # Log only safe diagnostic metadata; never expose database details to clients.
+    driver_error = getattr(exc, "orig", None)
+    sqlstate = getattr(driver_error, "sqlstate", None) or getattr(driver_error, "pgcode", None)
+
+    if not isinstance(sqlstate, str) or len(sqlstate) != 5 or not sqlstate.isascii() or not sqlstate.isalnum():
+        sqlstate = "unavailable"
+
+    logging.getLogger(__name__).error(
+        "Database request failed (exception_class=%s, driver_exception_class=%s, sqlstate=%s)",
+        type(exc).__name__,
+        type(driver_error).__name__ if driver_error is not None else "unavailable",
+        sqlstate,
+    )
+
     return JSONResponse(status_code=503, content={"detail": "Record service is temporarily unavailable."})
 
 
