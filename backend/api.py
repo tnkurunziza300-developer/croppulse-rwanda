@@ -7,12 +7,15 @@ import hashlib
 import secrets
 import logging
 import re
+import subprocess
+import sys
 import warnings
 from io import BytesIO
 from hashlib import sha256
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from itertools import count
+from pathlib import Path
 from uuid import uuid4
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -26,10 +29,11 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pwdlib import PasswordHash
 from starlette.types import ASGIApp, Receive, Scope, Send
 from sqlalchemy import func, or_, select, text, update
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .db import Base, get_db, get_engine
+from .db import Base, database_url, get_db, get_engine
 from .diagnostics import migration_heads
 from . import models
 from . import account_mail
@@ -271,12 +275,73 @@ def _record_registration_attempt(request: Request, db: Session):
         db.commit()
 
 
+def _run_alembic_upgrade() -> tuple[int, str, str]:
+    """Run `alembic upgrade head` in a child process and return (code, stdout, stderr)."""
+    repository_root = Path(__file__).resolve().parent.parent
+    config_path = repository_root / "alembic.ini"
+    if not config_path.is_file():
+        raise RuntimeError("Alembic configuration is missing; the database schema cannot be applied at startup.")
+    completed = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", str(config_path), "upgrade", "head"],
+        cwd=repository_root,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    return completed.returncode, completed.stdout or "", completed.stderr or ""
+
+
+def _redact_database_details(output: str) -> str:
+    """Strip the configured database URL, password, and any credentials from output."""
+    try:
+        configured = database_url()
+    except Exception:
+        configured = ""
+    redacted = output
+    if configured:
+        redacted = redacted.replace(configured, "<database url>")
+        try:
+            password = make_url(configured).password
+        except Exception:
+            password = None
+        if password:
+            redacted = redacted.replace(password, "<password>")
+    return re.sub(r"(?<=://)[^/\s@]+@", "<credentials>@", redacted)
+
+
+def _apply_startup_migrations() -> None:
+    """Apply reviewed Alembic migrations before the API serves requests.
+
+    A newly provisioned deployment database has no tables, so every
+    authenticated request would otherwise fail with a missing-relation error.
+    Set CROP_PULSE_RUN_MIGRATIONS_ON_START=0 to apply migrations out of band.
+    """
+    enabled = os.environ.get("CROP_PULSE_RUN_MIGRATIONS_ON_START", "1").strip().lower()
+    if enabled in {"0", "false", "no", "off"}:
+        return
+    if os.environ.get("CROP_PULSE_ENVIRONMENT", "development").strip().lower() == "test":
+        return
+    logger = logging.getLogger(__name__)
+    returncode, stdout, stderr = _run_alembic_upgrade()
+    if stdout.strip():
+        logger.info("Startup migrations: %s", _redact_database_details(stdout.strip())[-2000:])
+    if returncode != 0:
+        detail = _redact_database_details((stderr or stdout).strip())[-2000:]
+        logger.error("Startup migration failed: %s", detail)
+        raise RuntimeError(
+            "CropPulse could not apply its database migrations at startup. "
+            f"Alembic reported: {detail or 'no output'}"
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app):
     # Authentication endpoints must not start in a state where CSRF/JWT signing fails at request time.
     validate_runtime_config()
+    _apply_startup_migrations()
     _temporary_database_diagnostic()
-    # Development convenience only. Deployments must apply Alembic migrations.
+    # Legacy development shortcut only; deployments get their schema from the
+    # Alembic migrations applied above.
     if os.environ.get("CROP_PULSE_AUTO_CREATE_SCHEMA") == "1":
         Base.metadata.create_all(get_engine())
     yield
