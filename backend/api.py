@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import secrets
 import logging
+import re
 import warnings
 from io import BytesIO
 from hashlib import sha256
@@ -243,6 +244,21 @@ async def safe_database_error(_: Request, exc: SQLAlchemyError):
 
     table_name = safe_identifier(getattr(diagnostic, "table_name", None))
     schema_name = safe_identifier(getattr(diagnostic, "schema_name", None))
+    if sqlstate == "42P01":
+        message_primary = getattr(diagnostic, "message_primary", None)
+        relation_match = (
+            re.fullmatch(r'relation "([^"]+)"(?:\."([^"]+)")? does not exist', message_primary)
+            if isinstance(message_primary, str) else None
+        )
+        if relation_match:
+            parsed_first = safe_identifier(relation_match.group(1))
+            parsed_second = safe_identifier(relation_match.group(2)) if relation_match.group(2) else None
+            parsed_schema = parsed_first if parsed_second else "unavailable"
+            parsed_table = parsed_second or parsed_first
+            if table_name == "unavailable":
+                table_name = parsed_table
+            if schema_name == "unavailable":
+                schema_name = parsed_schema
 
     logging.getLogger(__name__).error(
         "Database request failed (exception_class=%s, driver_exception_class=%s, sqlstate=%s, "

@@ -438,6 +438,53 @@ def test_database_failure_logs_only_safe_postgres_table_diagnostics(
     assert "SQL details" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("message_primary", "expected_table", "expected_schema", "sensitive_value"),
+    [
+        ('relation "farmer_sessions" does not exist', "farmer_sessions", "unavailable", None),
+        ('relation "public"."farmer_sessions" does not exist', "farmer_sessions", "public", None),
+        ('relation "public.farmer_sessions" does not exist', "unavailable", "unavailable", None),
+        ('relation "farmer sessions" does not exist; password=secret', "unavailable", "unavailable", "password=secret"),
+        ('relation "farmers" does not exist because SELECT email failed', "unavailable", "unavailable", "SELECT email"),
+    ],
+)
+def test_missing_relation_message_extracts_only_safe_identifier(
+    api_client, monkeypatch, caplog, message_primary, expected_table, expected_schema, sensitive_value
+):
+    class Diagnostic:
+        def __init__(self):
+            self.table_name = None
+            self.schema_name = None
+            self.message_primary = message_primary
+
+    class DriverError:
+        sqlstate = "42P01"
+        diag = Diagnostic()
+
+    class BrokenEngine:
+        def connect(self):
+            error = SQLAlchemyError("private://db-password and SQL statement")
+            error.orig = DriverError()
+            raise error
+
+    monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
+    response = api_client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Record service is temporarily unavailable."}
+    assert "sqlstate=42P01" in caplog.text
+    assert f"table_name={expected_table}" in caplog.text
+    assert f"schema_name={expected_schema}" in caplog.text
+    for private_value in (
+        message_primary, "private://", "db-password", "SQL statement",
+    ):
+        assert private_value not in caplog.text
+        assert private_value not in response.text
+    if sensitive_value:
+        assert sensitive_value not in caplog.text
+        assert sensitive_value not in response.text
+
+
 def test_frontend_logout_clears_local_login_state():
     from backend.client import clear_local_login_state
     state = {"cp_access_token": "synthetic", "cp_farmer": {"id": "synthetic"}, "cp_selected_farm": "synthetic", "active_farm_choice": "synthetic", "keep": "ui preference"}
