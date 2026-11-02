@@ -397,6 +397,47 @@ def test_health_hides_database_driver_details(api_client, monkeypatch, caplog):
     assert "SQL details" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("table_name", "schema_name", "expected_table", "expected_schema"),
+    [
+        ("farmer_sessions", "public", "farmer_sessions", "public"),
+        ("farmer sessions", "public-schema", "unavailable", "unavailable"),
+    ],
+)
+def test_database_failure_logs_only_safe_postgres_table_diagnostics(
+    api_client, monkeypatch, caplog, table_name, schema_name, expected_table, expected_schema
+):
+    class Diagnostic:
+        pass
+
+    class DriverError:
+        sqlstate = "42P01"
+
+        def __init__(self):
+            self.diag = Diagnostic()
+            self.diag.table_name = table_name
+            self.diag.schema_name = schema_name
+
+    class BrokenEngine:
+        def connect(self):
+            error = SQLAlchemyError("sensitive connection and SQL details")
+            error.orig = DriverError()
+            raise error
+
+    monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
+    response = api_client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Record service is temporarily unavailable."}
+    assert "sqlstate=42P01" in caplog.text
+    assert f"table_name={expected_table}" in caplog.text
+    assert f"schema_name={expected_schema}" in caplog.text
+    assert "sensitive connection" not in response.text
+    assert "sensitive connection" not in caplog.text
+    assert "SQL details" not in response.text
+    assert "SQL details" not in caplog.text
+
+
 def test_frontend_logout_clears_local_login_state():
     from backend.client import clear_local_login_state
     state = {"cp_access_token": "synthetic", "cp_farmer": {"id": "synthetic"}, "cp_selected_farm": "synthetic", "active_farm_choice": "synthetic", "keep": "ui preference"}
@@ -1158,4 +1199,3 @@ def test_farm_timeline_aggregates_existing_records_in_order_without_mutation_or_
         "post_harvest": api_client.get(post_harvest_url, headers=headers).json(),
     }
     assert after == before
-

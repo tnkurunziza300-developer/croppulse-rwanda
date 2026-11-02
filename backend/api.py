@@ -233,11 +233,25 @@ async def safe_database_error(_: Request, exc: SQLAlchemyError):
     if not isinstance(sqlstate, str) or len(sqlstate) != 5 or not sqlstate.isascii() or not sqlstate.isalnum():
         sqlstate = "unavailable"
 
+    diagnostic = getattr(driver_error, "diag", None)
+
+    def safe_identifier(value) -> str:
+        if (not isinstance(value, str) or not value or not value.isascii()
+                or not all(character.isalnum() or character == "_" for character in value)):
+            return "unavailable"
+        return value
+
+    table_name = safe_identifier(getattr(diagnostic, "table_name", None))
+    schema_name = safe_identifier(getattr(diagnostic, "schema_name", None))
+
     logging.getLogger(__name__).error(
-        "Database request failed (exception_class=%s, driver_exception_class=%s, sqlstate=%s)",
+        "Database request failed (exception_class=%s, driver_exception_class=%s, sqlstate=%s, "
+        "table_name=%s, schema_name=%s)",
         type(exc).__name__,
         type(driver_error).__name__ if driver_error is not None else "unavailable",
         sqlstate,
+        table_name,
+        schema_name,
     )
 
     return JSONResponse(status_code=503, content={"detail": "Record service is temporarily unavailable."})
