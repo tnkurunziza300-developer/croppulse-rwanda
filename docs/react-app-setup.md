@@ -1,6 +1,8 @@
 # React + FastAPI workspace setup (Windows)
 
-This guide runs the new React/TypeScript frontend beside the existing Streamlit app. Both use the same Phase 1 FastAPI service and SQLite database. Neither React nor Streamlit opens SQLite directly.
+> **Superseded for database setup.** This historical guide describes SQLite as the active database and contains SQLite backup/restore commands. Do not use those database commands for current runs. Follow [PostgreSQL primary database](postgresql-primary-database.md) for the current runtime contract. The remaining UI setup notes are retained as historical workflow documentation.
+
+This guide originally ran the React/TypeScript frontend beside the existing Streamlit app using a shared Phase 1 FastAPI service and SQLite database. Neither React nor Streamlit opened SQLite directly.
 
 ## What is implemented
 
@@ -59,14 +61,14 @@ Migration `0008_streamlit_handoff` adds an isolated table for hashed, expiring, 
 Start FastAPI in this terminal:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn backend.api:app --host 127.0.0.1 --port 8001
+.\.venv\Scripts\python.exe -m uvicorn backend.api:app --host 127.0.0.1 --port 8002
 ```
 
 Verify it from another PowerShell terminal:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8001/health
-Invoke-WebRequest http://127.0.0.1:8001/v1/browser-auth/csrf -Headers @{ Origin = "http://127.0.0.1:5173" } | Select-Object StatusCode
+Invoke-RestMethod http://127.0.0.1:8002/health
+Invoke-WebRequest http://127.0.0.1:8002/v1/browser-auth/csrf -Headers @{ Origin = "http://127.0.0.1:5173" } | Select-Object StatusCode
 ```
 
 Both checks should succeed; the CSRF response should be HTTP 200 and include `Access-Control-Allow-Origin: http://127.0.0.1:5173`. `/health` checks database readiness. Startup checks that authentication signing is configured. The local launcher also checks CSRF and CORS before reusing an already-running API.
@@ -82,7 +84,7 @@ Copy-Item .env.example .env.local
 npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173`. The `.env.local` file contains only the public API base URL. It must use the same port as the FastAPI process: the example defaults to `http://127.0.0.1:8001`. If you run FastAPI on port 8001, set `VITE_API_BASE_URL=http://127.0.0.1:8001` and restart Vite. Never put a database URL, signing key, or password in a `VITE_*` variable.
+Open `http://127.0.0.1:5173`. Set `VITE_API_BASE_URL=http://127.0.0.1:8002` in `frontend/.env.local` and restart Vite. This value is public frontend configuration; never put a database URL, signing key, or password in a `VITE_*` variable.
 
 Create an account from the React sign-in screen. To provision the first platform administrator, stop neither the database nor API, open another PowerShell terminal from the repository root, set the same `CROP_PULSE_DATABASE_URL`, and run:
 
@@ -95,7 +97,7 @@ The command asks you to type the exact email, requires an existing active accoun
 
 ## Run Streamlit locally
 
-After applying database migrations, run `run_streamlit.ps1` from the repository root. It starts or reuses the current API on port 8001, configures the handoff destination as `http://127.0.0.1:8501`, sets `CROP_PULSE_API_URL` only for the Streamlit process, and stops the API it started when Streamlit exits. Before reusing an API process, it checks that both sign-in handoff directions are present. In local development, the Streamlit sidebar return link defaults to `http://127.0.0.1:5173/overview`. Port 8501 must be free because the React handoff URL is configured to that address.
+Run `run_streamlit.ps1` from the repository root. It reuses a healthy API on port 8002 without passing database credentials to Streamlit; a PostgreSQL URL is required only when it must start a new backend. The launcher configures the handoff destination as `http://127.0.0.1:8501`, sets `CROP_PULSE_API_URL` only for Streamlit, and stops only an API process it started when Streamlit exits. Before reusing an API process, it checks health and the required sign-in handoff routes. In local development, the Streamlit sidebar return link defaults to `http://127.0.0.1:5173/overview`. Port 8501 must be free because the React handoff URL is configured to that address.
 
 ```powershell
 .\run_streamlit.ps1

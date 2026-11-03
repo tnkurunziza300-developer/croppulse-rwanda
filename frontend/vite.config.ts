@@ -47,8 +47,8 @@ export function assertSafeFrontendEnvironment(mode: string, values: Record<strin
   }
   if (mode === 'production') {
     const apiBaseUrl = values.VITE_API_BASE_URL?.trim() ?? '';
-    // Vercel routes /v1/* to the API service on the same origin. This explicit
-    // sentinel is build-time configuration; service bindings are runtime-only.
+    // Vercel routes /v1/* through a same-origin external rewrite. This explicit
+    // sentinel keeps the upstream origin out of the browser bundle.
     if (apiBaseUrl === 'same-origin') return;
     let parsedApiBase: URL | undefined;
     try { parsedApiBase = new URL(apiBaseUrl); } catch { /* produce a safe configuration error below */ }

@@ -1,9 +1,15 @@
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $python = Join-Path $root ".venv\Scripts\python.exe"
-$apiUrl = "http://127.0.0.1:8001"
+$apiUrl = "http://127.0.0.1:8002"
 $streamlitUrl = "http://127.0.0.1:8501"
 $apiProcess = $null
+$runtimeEnvironment = [Environment]::GetEnvironmentVariable("CROP_PULSE_ENVIRONMENT", "Process")
+if ([string]::IsNullOrWhiteSpace($runtimeEnvironment)) { $runtimeEnvironment = "development" }
+if ($runtimeEnvironment.Trim().ToLowerInvariant() -in @("staging", "production", "prod")) {
+    throw "This local HTTP launcher is for development only. Start staging/production with its HTTPS service configuration."
+}
+$databaseUrl = [Environment]::GetEnvironmentVariable("CROP_PULSE_DATABASE_URL", "Process")
 
 if (-not (Test-Path -LiteralPath $python)) {
     throw "CropPulse Python environment was not found at $python. Create it and install requirements.txt first."
@@ -36,24 +42,33 @@ function Test-CropPulseApi {
     }
 }
 
-$listener = Get-NetTCPConnection -State Listen -LocalPort 8001 -ErrorAction SilentlyContinue | Select-Object -First 1
+$listener = Get-NetTCPConnection -State Listen -LocalPort 8002 -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($listener) {
     if (-not (Test-CropPulseApi)) {
-        throw "Port 8001 is occupied by an API that failed CropPulse readiness checks (health, browser CSRF signing, CORS, or required routes). Verify the listener, then restart the current backend.api:app with a valid CROP_PULSE_SECRET_KEY and configured CORS origins."
+        throw "Port 8002 is occupied by a service that failed CropPulse readiness checks. No process was stopped. Verify the listener before retrying."
     }
-    Write-Host "Using the CropPulse API already running at $apiUrl."
+    Write-Host "Using the verified CropPulse API at $apiUrl."
 } else {
+    if ([string]::IsNullOrWhiteSpace($databaseUrl)) {
+        throw "Set CROP_PULSE_DATABASE_URL in the backend launch process before starting a new API. SQLite fallback is disabled."
+    }
+    $databaseBackend = & $python -c "from backend.db import database_url; from sqlalchemy.engine import make_url; print(make_url(database_url()).get_backend_name())" 2>$null
+    if ($LASTEXITCODE -ne 0 -or ($databaseBackend | Select-Object -Last 1) -ne "postgresql") {
+        throw "CROP_PULSE_DATABASE_URL must identify a PostgreSQL database using the configured psycopg driver. URL details are omitted."
+    }
     $apiSettings = @{
-        CROP_PULSE_DATABASE_URL = "sqlite:///./data/croppulse_phase1.sqlite3"
         CROP_PULSE_SECRET_KEY = (& $python -c "import secrets; print(secrets.token_urlsafe(48))").Trim()
         CROP_PULSE_CORS_ORIGINS = "http://127.0.0.1:5173,http://localhost:5173"
         CROP_PULSE_COOKIE_SECURE = "0"
-        CROP_PULSE_ENVIRONMENT = "development"
+        CROP_PULSE_ENVIRONMENT = $runtimeEnvironment.Trim().ToLowerInvariant()
         CROP_PULSE_AUTO_CREATE_SCHEMA = "0"
         CROP_PULSE_STREAMLIT_URL = $streamlitUrl
     }
-    $apiLog = Join-Path $env:TEMP "croppulse-api-8001.log"
-    $apiErrorLog = Join-Path $env:TEMP "croppulse-api-8001-error.log"
+    # The explicitly configured PostgreSQL URL is inherited by the API child
+    # without being printed or placed on its command line.
+    $apiSettings["CROP_PULSE_DATABASE_URL"] = $databaseUrl
+    $apiLog = Join-Path $env:TEMP "croppulse-api-8002.log"
+    $apiErrorLog = Join-Path $env:TEMP "croppulse-api-8002-error.log"
     $previousSettings = @{}
     try {
         foreach ($name in $apiSettings.Keys) {
@@ -61,7 +76,7 @@ if ($listener) {
             [Environment]::SetEnvironmentVariable($name, $apiSettings[$name], "Process")
         }
         $apiProcess = Start-Process -FilePath $python `
-            -ArgumentList @("-m", "uvicorn", "backend.api:app", "--host", "127.0.0.1", "--port", "8001") `
+            -ArgumentList @("-m", "uvicorn", "backend.api:app", "--host", "127.0.0.1", "--port", "8002") `
             -WorkingDirectory $root -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput $apiLog -RedirectStandardError $apiErrorLog
     } finally {

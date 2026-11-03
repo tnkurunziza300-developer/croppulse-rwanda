@@ -1,14 +1,13 @@
 from logging.config import fileConfig
-import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
-from backend.db import Base
+from backend.db import Base, database_url
 from backend import models  # noqa: F401
 
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
-config.set_main_option("sqlalchemy.url", os.environ.get("CROP_PULSE_DATABASE_URL", "sqlite:///./data/croppulse_phase1.sqlite3").replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", database_url().replace("%", "%%"))
 target_metadata = Base.metadata
 
 def run_migrations_offline():

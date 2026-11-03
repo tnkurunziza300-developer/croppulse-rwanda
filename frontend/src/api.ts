@@ -414,8 +414,8 @@ export function resolveApiBaseUrl(
   }
   if (production) {
     if (!configuredValue) throw new Error('A production build requires an explicit HTTPS VITE_API_BASE_URL.');
-    // Vercel's public /v1 rewrite keeps browser requests on the current origin.
-    // Bindings are only available to server-side runtime code, not this bundle.
+    // The explicit same-origin mode uses Vercel's /v1 external rewrite. Its
+    // upstream origin remains in Vercel's server-side project configuration.
     if (configuredValue === 'same-origin') return '';
     let productionUrl: URL;
     try { productionUrl = new URL(configuredValue); }
@@ -428,7 +428,7 @@ export function resolveApiBaseUrl(
     }
     return productionUrl.origin;
   }
-  const configured = (configuredValue ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
+  const configured = (configuredValue ?? 'http://127.0.0.1:8002').replace(/\/$/, '');
   const loopbackHosts = new Set(['localhost', '127.0.0.1']);
   if (!loopbackHosts.has(pageHostname)) return configured;
 

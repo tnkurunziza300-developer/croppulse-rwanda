@@ -41,6 +41,8 @@ def test_sqlite_diagnostics_are_read_only_and_report_migration_head(tmp_path, mo
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", _sqlite_url(database))
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", _sqlite_url(database))
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     command.upgrade(config, "head")
     before = database.stat()
 

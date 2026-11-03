@@ -6,11 +6,11 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules(); 
 
 describe('resolveApiBaseUrl', () => {
   it('aligns a loopback API hostname with a localhost app page', () => {
-    expect(resolveApiBaseUrl('http://127.0.0.1:8001', 'localhost')).toBe('http://localhost:8001');
+    expect(resolveApiBaseUrl('http://127.0.0.1:8002', 'localhost')).toBe('http://localhost:8002');
   });
 
   it('aligns a loopback API hostname with a 127.0.0.1 app page', () => {
-    expect(resolveApiBaseUrl('http://localhost:8001/', '127.0.0.1')).toBe('http://127.0.0.1:8001');
+    expect(resolveApiBaseUrl('http://localhost:8002/', '127.0.0.1')).toBe('http://127.0.0.1:8002');
   });
 
   it('keeps a remote API origin unchanged', () => {
@@ -18,12 +18,12 @@ describe('resolveApiBaseUrl', () => {
   });
 
   it('uses the local API default when none is configured', () => {
-    expect(resolveApiBaseUrl(undefined, '127.0.0.1')).toBe('http://127.0.0.1:8001');
+    expect(resolveApiBaseUrl(undefined, '127.0.0.1')).toBe('http://127.0.0.1:8002');
   });
 
   it('requires an explicit HTTPS API origin for production builds', () => {
     expect(() => resolveApiBaseUrl(undefined, 'crop.example.org', true)).toThrow(/explicit HTTPS/);
-    expect(() => resolveApiBaseUrl('http://127.0.0.1:8001', 'crop.example.org', true)).toThrow(/HTTPS origin/);
+    expect(() => resolveApiBaseUrl('http://127.0.0.1:8002', 'crop.example.org', true)).toThrow(/HTTPS origin/);
     expect(() => resolveApiBaseUrl('https://api.example.org/v1', 'crop.example.org', true)).toThrow(/without credentials or a path/);
     expect(resolveApiBaseUrl('https://api.example.org/', 'crop.example.org', true)).toBe('https://api.example.org');
   });
@@ -77,8 +77,8 @@ describe('resolveApiBaseUrl', () => {
       'https://farm-api.example.org', 'crop.example.org', false, true, 'http://demo-api.example.org',
     )).toThrow(/must use HTTPS/);
     expect(resolveApiBaseUrl(
-      'http://127.0.0.1:8001', 'localhost', false, true, 'http://127.0.0.1:8002',
-    )).toBe('http://127.0.0.1:8002');
+      'http://127.0.0.1:8002', 'localhost', false, true, 'http://127.0.0.1:8003',
+    )).toBe('http://127.0.0.1:8003');
   });
 
   it('keeps demo routing disabled by default', () => {

@@ -3,6 +3,8 @@
 import os
 from urllib.parse import urlsplit
 
+from .db import database_url
+
 
 def _secret() -> str:
     secret = os.environ.get("CROP_PULSE_SECRET_KEY", "")
@@ -26,6 +28,11 @@ def validate_runtime_config() -> None:
     if environment not in {"development", "test", "staging", "production"}:
         raise RuntimeError("Set CROP_PULSE_ENVIRONMENT to development, test, staging, or production.")
     _secret()
+    # Resolve the same PostgreSQL-only URL in every runtime environment so
+    # development cannot silently fall back to a local SQLite file.
+    database_url()
+    if os.environ.get("CROP_PULSE_AUTO_CREATE_SCHEMA", "0").strip() == "1":
+        raise RuntimeError("Automatic schema creation is disabled; apply reviewed Alembic migrations explicitly.")
     if environment in {"staging", "production"}:
         configured_origins = os.environ.get("CROP_PULSE_CORS_ORIGINS", "")
         origins = [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
@@ -39,8 +46,6 @@ def validate_runtime_config() -> None:
         cookie_setting = os.environ.get("CROP_PULSE_COOKIE_SECURE")
         if cookie_setting is not None and cookie_setting.strip().lower() not in {"1", "true", "yes"}:
             raise RuntimeError("Secure session cookies cannot be disabled in staging or production.")
-        if os.environ.get("CROP_PULSE_AUTO_CREATE_SCHEMA", "0").strip() == "1":
-            raise RuntimeError("Automatic schema creation is disabled in staging and production; use reviewed migrations.")
 
 
 def _cookie_secure() -> bool:

@@ -19,6 +19,8 @@ def test_preflight_accepts_exact_revision_on_disposable_database_without_mutatin
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", _url(database))
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", _url(database))
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     command.upgrade(config, "head")
     before = database.stat()
 
@@ -35,6 +37,8 @@ def test_preflight_rejects_wrong_revision_without_applying_upgrade(tmp_path, mon
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", _url(database))
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", _url(database))
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     command.upgrade(config, "0019_soil_records")
     before = database.stat()
 

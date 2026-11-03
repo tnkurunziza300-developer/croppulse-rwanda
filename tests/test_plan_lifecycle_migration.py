@@ -1,16 +1,47 @@
+import importlib.util
+import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from pathlib import Path
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.mark.parametrize(
+    ("reflected_name", "expected_name"),
+    [
+        ("activity_review_decisions_reviewer_id_fkey", "activity_review_decisions_reviewer_id_fkey"),
+        (None, "fk_activity_review_decisions_reviewer_id_farmers"),
+    ],
+)
+def test_self_service_migration_resolves_dialect_specific_reviewer_fk_name(monkeypatch, reflected_name, expected_name):
+    migration_path = ROOT / "backend" / "migrations" / "versions" / "0005_self_service_account.py"
+    spec = importlib.util.spec_from_file_location("migration_0005_self_service_account_test", migration_path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    class Inspector:
+        def get_foreign_keys(self, table_name):
+            assert table_name == "activity_review_decisions"
+            return [{
+                "name": reflected_name,
+                "constrained_columns": ["reviewer_id"],
+                "referred_table": "farmers",
+                "referred_columns": ["id"],
+            }]
+
+    monkeypatch.setattr(migration.sa, "inspect", lambda _bind: Inspector())
+    assert migration._reviewer_fk_constraint_name(object()) == expected_name
 
 
 def test_existing_crop_plans_receive_planned_status_on_upgrade(tmp_path, monkeypatch):
     database = tmp_path / "upgrade.sqlite3"
     database_url = f"sqlite:///{database.as_posix()}"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     config = Config(str(ROOT / "alembic.ini"))
 
     command.upgrade(config, "0003_roles_review_and_admin")
@@ -39,6 +70,8 @@ def test_account_action_migration_preserves_review_decision_when_reviewer_is_del
     database = tmp_path / "account-actions.sqlite3"
     database_url = f"sqlite:///{database.as_posix()}"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     config = Config(str(ROOT / "alembic.ini"))
     command.upgrade(config, "0004_crop_plan_lifecycle")
     engine = create_engine(database_url)
@@ -56,7 +89,6 @@ def test_account_action_migration_preserves_review_decision_when_reviewer_is_del
             (id,activity_id,reviewer_id,decision,reason,created_at)
             VALUES ('decision','activity','reviewer','approved_as_reviewed','Reviewed','2026-01-02')"""))
     engine.dispose()
-
     command.upgrade(config, "head")
     engine = create_engine(database_url)
     with engine.begin() as connection:
@@ -69,10 +101,52 @@ def test_account_action_migration_preserves_review_decision_when_reviewer_is_del
     engine.dispose()
 
 
+def test_account_action_migration_downgrade_restores_nonnull_restrict_reviewer_fk(tmp_path, monkeypatch):
+    database = tmp_path / "account-actions-downgrade.sqlite3"
+    database_url = f"sqlite:///{database.as_posix()}"
+    monkeypatch.setenv("CROP_PULSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
+    config = Config(str(ROOT / "alembic.ini"))
+    command.upgrade(config, "0004_crop_plan_lifecycle")
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(text("""INSERT INTO farmers
+            (id,email,password_hash,display_name,privacy_notice_version,privacy_accepted_at,created_at)
+            VALUES ('reviewer','reviewer@example.test','hash','Reviewer','v1','2026-01-01','2026-01-01')"""))
+        connection.execute(text("INSERT INTO farms (id,owner_id,name,district,created_at) VALUES ('farm','reviewer','Farm','Huye','2026-01-01')"))
+        connection.execute(text("""INSERT INTO farm_activities
+            (id,farm_id,district,crop,season,activity_type,event_date,notes,verification,created_at,updated_at)
+            VALUES ('activity','farm','Huye','Maize','A','Planting','2026-01-01','','user_reported','2026-01-01','2026-01-01')"""))
+        connection.execute(text("""INSERT INTO activity_review_decisions
+            (id,activity_id,reviewer_id,decision,reason,created_at)
+            VALUES ('decision','activity','reviewer','approved_as_reviewed','Reviewed','2026-01-02')"""))
+    engine.dispose()
+
+    command.upgrade(config, "0005_self_service_account")
+    engine = create_engine(database_url)
+    inspector = inspect(engine)
+    reviewer_column = next(column for column in inspector.get_columns("activity_review_decisions") if column["name"] == "reviewer_id")
+    reviewer_fk = next(fk for fk in inspector.get_foreign_keys("activity_review_decisions") if fk["constrained_columns"] == ["reviewer_id"])
+    assert reviewer_column["nullable"] is True and reviewer_fk["options"].get("ondelete") == "SET NULL"
+    engine.dispose()
+
+    command.downgrade(config, "0004_crop_plan_lifecycle")
+    engine = create_engine(database_url)
+    inspector = inspect(engine)
+    reviewer_column = next(column for column in inspector.get_columns("activity_review_decisions") if column["name"] == "reviewer_id")
+    reviewer_fk = next(fk for fk in inspector.get_foreign_keys("activity_review_decisions") if fk["constrained_columns"] == ["reviewer_id"])
+    assert reviewer_column["nullable"] is False and reviewer_fk["options"].get("ondelete") == "RESTRICT"
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT reviewer_id FROM activity_review_decisions WHERE id='decision'")).scalar_one() == "reviewer"
+    engine.dispose()
+
 def test_private_messaging_migration_upgrade_and_downgrade_are_additive(tmp_path, monkeypatch):
     database = tmp_path / "private-messaging.sqlite3"
     database_url = f"sqlite:///{database.as_posix()}"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     config = Config(str(ROOT / "alembic.ini"))
     command.upgrade(config, "0005_self_service_account")
     engine = create_engine(database_url)
@@ -101,6 +175,8 @@ def test_field_and_evidence_migration_preserves_plans_and_is_reversible(tmp_path
     database = tmp_path / "fields-evidence.sqlite3"
     database_url = f"sqlite:///{database.as_posix()}"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     config = Config(str(ROOT / "alembic.ini"))
     command.upgrade(config, "0006_private_messaging")
     engine = create_engine(database_url)
@@ -139,6 +215,8 @@ def test_crop_health_context_migration_preserves_existing_reports_and_is_reversi
     database = tmp_path / "crop-health-context.sqlite3"
     database_url = f"sqlite:///{database.as_posix()}"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", database_url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     config = Config(str(ROOT / "alembic.ini"))
     command.upgrade(config, "0009_crop_health_cases")
     engine = create_engine(database_url)

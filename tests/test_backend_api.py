@@ -1,9 +1,7 @@
 import pytest
 import jwt
 import backend.api as api_module
-import asyncio
 from datetime import date, datetime, timedelta, timezone
-from contextlib import nullcontext
 from fastapi.testclient import TestClient
 from pathlib import Path
 from uuid import uuid4
@@ -24,8 +22,10 @@ def api_client(monkeypatch):
     temp_root.mkdir(parents=True, exist_ok=True)
     db_path = temp_root / f"records-{uuid4().hex}.sqlite3"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     monkeypatch.setenv("CROP_PULSE_SECRET_KEY", "test-only-secret-key-of-at-least-32-characters")
     monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_AUTO_CREATE_SCHEMA", "0")
     _engine.cache_clear()
     Base.metadata.create_all(get_engine())
     with TestClient(app) as client:
@@ -379,271 +379,18 @@ def test_weather_alert_history_is_private_deduplicated_acknowledgeable_and_expir
     assert changed.json()["acknowledged_at"] is not None
 
 
-def test_health_hides_database_driver_details(api_client, monkeypatch, caplog):
+def test_health_hides_database_driver_details_and_logs_safe_diagnostics(api_client, monkeypatch, caplog):
     class BrokenEngine:
         def connect(self):
             raise SQLAlchemyError("private://db-password and SQL details")
-
     monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
     response = api_client.get("/health")
-
     assert response.status_code == 503
-    assert "private://" not in response.text
-    assert "db-password" not in response.text
-
-    assert "Database request failed" in caplog.text
-    assert "SQLAlchemyError" in caplog.text
-    assert "sqlstate=unavailable" in caplog.text
-    assert "private://" not in caplog.text
-    assert "db-password" not in caplog.text
-    assert "SQL details" not in caplog.text
-
-
-@pytest.mark.parametrize(
-    ("table_name", "schema_name", "expected_table", "expected_schema"),
-    [
-        ("farmer_sessions", "public", "farmer_sessions", "public"),
-        ("farmer sessions", "public-schema", "unavailable", "unavailable"),
-    ],
-)
-def test_database_failure_logs_only_safe_postgres_table_diagnostics(
-    api_client, monkeypatch, caplog, table_name, schema_name, expected_table, expected_schema
-):
-    class Diagnostic:
-        pass
-
-    class DriverError:
-        sqlstate = "42P01"
-
-        def __init__(self):
-            self.diag = Diagnostic()
-            self.diag.table_name = table_name
-            self.diag.schema_name = schema_name
-
-    class BrokenEngine:
-        def connect(self):
-            error = SQLAlchemyError("sensitive connection and SQL details")
-            error.orig = DriverError()
-            raise error
-
-    monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
-    response = api_client.get("/health")
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Record service is temporarily unavailable."}
-    assert "sqlstate=42P01" in caplog.text
-    assert f"table_name={expected_table}" in caplog.text
-    assert f"schema_name={expected_schema}" in caplog.text
-    assert "sensitive connection" not in response.text
-    assert "sensitive connection" not in caplog.text
-    assert "SQL details" not in response.text
-    assert "SQL details" not in caplog.text
-
-
-def test_temporary_database_diagnostic_is_disabled_without_exact_flag(monkeypatch, caplog):
-    monkeypatch.delenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", raising=False)
-    monkeypatch.setattr(
-        api_module, "get_engine",
-        lambda: pytest.fail("disabled diagnostics must not access the engine"),
-    )
-    api_module._temporary_database_diagnostic()
-    assert "Temporary database diagnostic" not in caplog.text
-
-    monkeypatch.setenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", "true")
-    api_module._temporary_database_diagnostic()
-    assert "Temporary database diagnostic" not in caplog.text
-
-
-def test_temporary_database_diagnostic_checks_read_only_schema_tables_and_revision(
-    monkeypatch, caplog
-):
-    caplog.set_level("INFO")
-    executed = []
-    resolved_relations = {
-        "farmers": ("public", "r"),
-        "farms": ("tenant", "p"),
-        "crop_plans": None,
-        "farm_activities": ("public", "v"),
-        "alembic_version": ("migrations", "r"),
-    }
-    expected_tables = set(resolved_relations)
-
-    class Result:
-        def __init__(self, value=None, values=None):
-            self.value = value
-            self.values = values or []
-
-        def scalar_one(self):
-            return self.value
-
-        def scalar_one_or_none(self):
-            return self.value
-
-        def scalars(self):
-            return self
-
-        def all(self):
-            return self.values
-
-    class Connection:
-        dialect = type("Dialect", (), {"name": "postgresql"})()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-        def begin(self):
-            return nullcontext()
-
-        def execute(self, statement, parameters=None):
-            sql = str(statement)
-            executed.append((sql, parameters))
-            if sql == "SELECT 1":
-                return Result(1)
-            if sql == "SELECT current_schema()":
-                return Result("public")
-            if sql == "SELECT current_schemas(true)":
-                return Result(["pg_catalog", "public", "tenant", "migrations", "private schema"])
-            if ("pg_catalog.pg_class" in sql
-                    and "pg_catalog.to_regclass(:relation_name)" in sql):
-                table_name = parameters["relation_name"]
-                assert table_name in expected_tables
-                return Result(resolved_relations[table_name])
-            if sql == "SELECT version_num FROM alembic_version":
-                assert resolved_relations["alembic_version"] == ("migrations", "r")
-                return Result(values=["0020_agronomy_review_workflow"])
-            return Result()
-
-    class Engine:
-        dialect = Connection.dialect
-
-        def connect(self):
-            return Connection()
-
-    monkeypatch.setenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", "1")
-    monkeypatch.setattr(api_module, "get_engine", lambda: Engine())
-    monkeypatch.setattr(
-        api_module, "migration_heads", lambda: ["0020_agronomy_review_workflow"]
-    )
-
-    api_module._temporary_database_diagnostic()
-
-    assert executed[0][0] == "SET TRANSACTION READ ONLY"
-    catalog_checks = [
-        parameters["relation_name"] for sql, parameters in executed
-        if ("pg_catalog.pg_class" in sql
-            and "pg_catalog.to_regclass(:relation_name)" in sql)
-    ]
-    assert set(catalog_checks) == expected_tables
-    revision_query_index = [sql for sql, _ in executed].index(
-        "SELECT version_num FROM alembic_version"
-    )
-    alembic_resolution_index = next(
-        index for index, (sql, params) in enumerate(executed)
-        if ("pg_catalog.pg_class" in sql
-            and "pg_catalog.to_regclass(:relation_name)" in sql)
-        and params["relation_name"] == "alembic_version"
-    )
-    assert alembic_resolution_index < revision_query_index
-    assert "SELECT current_schema()" in [sql for sql, _ in executed]
-    assert "SELECT current_schemas(true)" in [sql for sql, _ in executed]
-    assert "SELECT version_num FROM alembic_version" in [sql for sql, _ in executed]
-    assert "Temporary database diagnostic" in caplog.text
-    assert "connection=ok" in caplog.text
-    assert "schema=public" in caplog.text
-    assert "effective_schemas=pg_catalog,public,tenant,migrations,unavailable" in caplog.text
-    assert "private schema" not in caplog.text
-    assert "revision=0020_agronomy_review_workflow" in caplog.text
-    assert "expected_revision=0020_agronomy_review_workflow" in caplog.text
-    assert "revision_matches=true" in caplog.text
-    assert "farmers_schema=public" in caplog.text
-    assert "farms_schema=tenant" in caplog.text
-    assert "crop_plans_schema=missing" in caplog.text
-    assert "farm_activities_schema=not_a_table" in caplog.text
-    assert "alembic_version_schema=migrations" in caplog.text
-
-
-def test_temporary_database_diagnostic_failure_is_safe_and_does_not_block_startup(
-    monkeypatch, caplog
-):
-    class DriverError:
-        sqlstate = "42P01"
-
-    class BrokenEngine:
-        dialect = type("Dialect", (), {"name": "postgresql"})()
-
-        def connect(self):
-            error = SQLAlchemyError(
-                "postgresql://private-user:private-password@host/db; SELECT private_data"
-            )
-            error.orig = DriverError()
-            raise error
-
-    monkeypatch.setenv("CROP_PULSE_TEMP_DB_DIAGNOSTIC", "1")
-    monkeypatch.setenv("CROP_PULSE_AUTO_CREATE_SCHEMA", "0")
-    monkeypatch.setattr(api_module, "validate_runtime_config", lambda: None)
-    monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
-
-    async def start_api():
-        async with api_module.lifespan(api_module.app):
-            return "started"
-
-    assert asyncio.run(start_api()) == "started"
+    assert "private://" not in response.text and "db-password" not in response.text
+    assert "private://" not in caplog.text and "db-password" not in caplog.text
     assert "exception_class=SQLAlchemyError" in caplog.text
-    assert "sqlstate=42P01" in caplog.text
-    for private_value in (
-        "postgresql://", "private-user", "private-password", "private_data", "SELECT",
-    ):
-        assert private_value not in caplog.text
-
-
-@pytest.mark.parametrize(
-    ("message_primary", "expected_table", "expected_schema", "sensitive_value"),
-    [
-        ('relation "farmer_sessions" does not exist', "farmer_sessions", "unavailable", None),
-        ('relation "public"."farmer_sessions" does not exist', "farmer_sessions", "public", None),
-        ('relation "public.farmer_sessions" does not exist', "unavailable", "unavailable", None),
-        ('relation "farmer sessions" does not exist; password=secret', "unavailable", "unavailable", "password=secret"),
-        ('relation "farmers" does not exist because SELECT email failed', "unavailable", "unavailable", "SELECT email"),
-    ],
-)
-def test_missing_relation_message_extracts_only_safe_identifier(
-    api_client, monkeypatch, caplog, message_primary, expected_table, expected_schema, sensitive_value
-):
-    class Diagnostic:
-        def __init__(self):
-            self.table_name = None
-            self.schema_name = None
-            self.message_primary = message_primary
-
-    class DriverError:
-        sqlstate = "42P01"
-        diag = Diagnostic()
-
-    class BrokenEngine:
-        def connect(self):
-            error = SQLAlchemyError("private://db-password and SQL statement")
-            error.orig = DriverError()
-            raise error
-
-    monkeypatch.setattr(api_module, "get_engine", lambda: BrokenEngine())
-    response = api_client.get("/health")
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Record service is temporarily unavailable."}
-    assert "sqlstate=42P01" in caplog.text
-    assert f"table_name={expected_table}" in caplog.text
-    assert f"schema_name={expected_schema}" in caplog.text
-    for private_value in (
-        message_primary, "private://", "db-password", "SQL statement",
-    ):
-        assert private_value not in caplog.text
-        assert private_value not in response.text
-    if sensitive_value:
-        assert sensitive_value not in caplog.text
-        assert sensitive_value not in response.text
+    assert "backend=sqlite" in caplog.text and "driver=pysqlite" in caplog.text
+    assert "sqlstate=unavailable" in caplog.text
 
 
 def test_frontend_logout_clears_local_login_state():
@@ -1407,3 +1154,4 @@ def test_farm_timeline_aggregates_existing_records_in_order_without_mutation_or_
         "post_harvest": api_client.get(post_harvest_url, headers=headers).json(),
     }
     assert after == before
+

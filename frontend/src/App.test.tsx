@@ -393,8 +393,8 @@ describe('React authentication and role navigation', () => {
     }));
     render(<MemoryRouter initialEntries={['/messages']}><App /></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('does not provide the messaging endpoints');
-    expect(calls).toContainEqual({ url: 'http://localhost:8001/v1/messaging/reviewers', method: 'GET' });
-    expect(calls).toContainEqual({ url: 'http://localhost:8001/v1/messaging/conversations', method: 'GET' });
+    expect(calls).toContainEqual({ url: 'http://localhost:8002/v1/messaging/reviewers', method: 'GET' });
+    expect(calls).toContainEqual({ url: 'http://localhost:8002/v1/messaging/conversations', method: 'GET' });
   });
 
   it('registers through the cookie session flow without storing a token in browser storage', async () => {

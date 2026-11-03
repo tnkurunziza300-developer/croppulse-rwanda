@@ -36,11 +36,11 @@ def test_streamlit_reloads_cached_client_missing_react_return_helper(monkeypatch
     assert callable(client.react_portal_url)
 
 
-def test_streamlit_uses_local_api_default_but_requires_production_configuration(monkeypatch):
+def test_streamlit_uses_staging_api_default_but_requires_production_configuration(monkeypatch):
     import backend.client as client
     monkeypatch.delenv("CROP_PULSE_API_URL", raising=False)
     monkeypatch.delenv("CROP_PULSE_ENVIRONMENT", raising=False)
-    assert client.api_url() == "http://127.0.0.1:8001"
+    assert client.api_url() == "http://127.0.0.1:8002"
     monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "production")
     assert client.api_url() == ""
     monkeypatch.setenv("CROP_PULSE_API_URL", "https://api.example.test")

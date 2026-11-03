@@ -17,6 +17,8 @@ def test_harvest_migration_is_additive_and_reversible_on_disposable_database(mon
     database = (work / f"harvest-migration-{uuid4().hex}.sqlite3").resolve()
     url = f"sqlite:///{database.as_posix()}"
     monkeypatch.setenv("CROP_PULSE_DATABASE_URL", url)
+    monkeypatch.setenv("CROP_PULSE_ENVIRONMENT", "test")
+    monkeypatch.setenv("CROP_PULSE_ALLOW_SQLITE_TEST_DATABASE", "1")
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", url)
     engine = create_engine(url)

@@ -13,7 +13,7 @@ def api_url() -> str:
     environment = os.environ.get("CROP_PULSE_ENVIRONMENT", "development").strip().lower()
     if environment in {"production", "prod"}:
         return ""
-    return "http://127.0.0.1:8001"
+    return "http://127.0.0.1:8002"
 
 
 def enabled() -> bool:
