@@ -8,6 +8,23 @@ branch_labels = None
 depends_on = None
 
 
+def _reviewer_fk_constraint_name(bind):
+    """Resolve the reflected name across PostgreSQL and unnamed SQLite FKs."""
+    matches = [
+        foreign_key
+        for foreign_key in sa.inspect(bind).get_foreign_keys("activity_review_decisions")
+        if foreign_key.get("constrained_columns") == ["reviewer_id"]
+        and foreign_key.get("referred_table") == "farmers"
+        and foreign_key.get("referred_columns") == ["id"]
+    ]
+    if len(matches) != 1:
+        raise RuntimeError("Expected exactly one reviewer_id foreign key to farmers during migration 0005.")
+    # PostgreSQL assigns a dialect-generated name when migration 0003 created
+    # the unnamed constraint. SQLite reflection returns None; batch naming
+    # conventions provide its deterministic reflected name.
+    return matches[0].get("name") or "fk_activity_review_decisions_reviewer_id_farmers"
+
+
 def upgrade():
     op.create_table(
         "account_action_tokens",
@@ -26,26 +43,28 @@ def upgrade():
     op.create_index("ix_account_action_tokens_expires_at", "account_action_tokens", ["expires_at"])
 
     # Keep immutable reviewer decisions while anonymizing the deleted reviewer's identity.
+    reviewer_fk_name = _reviewer_fk_constraint_name(op.get_bind())
     with op.batch_alter_table(
         "activity_review_decisions",
         recreate="always",
         naming_convention={"fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"},
     ) as batch_op:
         batch_op.alter_column("reviewer_id", existing_type=sa.String(36), nullable=True)
-        batch_op.drop_constraint("fk_activity_review_decisions_reviewer_id_farmers", type_="foreignkey")
+        batch_op.drop_constraint(reviewer_fk_name, type_="foreignkey")
         batch_op.create_foreign_key(
             "fk_activity_review_decisions_reviewer_id_farmers", "farmers", ["reviewer_id"], ["id"], ondelete="SET NULL"
         )
 
 
 def downgrade():
+    reviewer_fk_name = _reviewer_fk_constraint_name(op.get_bind())
     with op.batch_alter_table(
         "activity_review_decisions",
         recreate="always",
         naming_convention={"fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"},
     ) as batch_op:
         batch_op.alter_column("reviewer_id", existing_type=sa.String(36), nullable=False)
-        batch_op.drop_constraint("fk_activity_review_decisions_reviewer_id_farmers", type_="foreignkey")
+        batch_op.drop_constraint(reviewer_fk_name, type_="foreignkey")
         batch_op.create_foreign_key(
             "fk_activity_review_decisions_reviewer_id_farmers", "farmers", ["reviewer_id"], ["id"], ondelete="RESTRICT"
         )
